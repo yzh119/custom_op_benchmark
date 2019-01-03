@@ -37,7 +37,7 @@ class MaskedMMSimple(Function):
 
 if __name__ == '__main__':
     import os
-    batch_size = 20 
+    batch_size = 512 
     l = 25
     n = batch_size * l
     e = batch_size * (l ** 2)
@@ -81,11 +81,15 @@ if __name__ == '__main__':
 
     import time
 
+    inc_x = inc_x.cuda()
+    inc_y = inc_y.cuda()
+    adj = adj.cuda()
+
     print('simple implementation')
     dim = 1024 
-    A = th.rand(n, dim, requires_grad=True)
-    B = th.rand(n, dim, requires_grad=True)
-    grad = th.rand(e)
+    A = th.rand(n, dim, requires_grad=True, device='cuda:0')
+    B = th.rand(n, dim, requires_grad=True, device='cuda:0')
+    grad = th.rand(e, device='cuda:0')
     tic = time.time()
     A_e = th.sparse.mm(inc_x.float(), A)
     B_e = th.sparse.mm(inc_y.float(), B)
@@ -113,10 +117,10 @@ if __name__ == '__main__':
    
     print('custom kernel')
     tic = time.time()
-    O = MaskedMM.apply(adj.cuda(), A.cuda(), B.cuda())
+    O = MaskedMM.apply(adj, A, B)
     print('forward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(O.cpu(), O_ori)
+    assert th.allclose(O, O_ori)
     tic = time.time()
-    O.backward(grad.cuda())
+    O.backward(grad)
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(A.grad.cpu(), A_grad_ori)
+    assert th.allclose(A.grad, A_grad_ori)

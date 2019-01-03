@@ -13,7 +13,7 @@ at::Tensor maskedmm_forward(
     at::Tensor col,
     at::Tensor A,
     at::Tensor B) {
-    // Check type
+    // TODO: Check type
     return maskedmm_cuda_forward(row, col, A, B);
 }
 
@@ -30,14 +30,15 @@ std::vector<at::Tensor> maskedmm_backward(
     at::Tensor A,
     at::Tensor B,
     at::Tensor dO) {
+    // TODO: check type
     return maskedmm_cuda_backward(row, col, A, B, dO);
 }
 
 /*
-std::vector<at::Tensor> sparse_softmax_scatter_cuda_forward();
-std::vector<at::Tensor> sparse_softmax_scatter_cuda_backward();
-std::vector<at::Tensor> sparse_softmax_gather_cuda_forward();
-std::vector<at::Tensor> sparse_softmax_gather_cuda_backward();
+std::vector<at::Tensor> sparse_softmax_cuda_forward();
+std::vector<at::Tensor> sparse_softmax_cuda_backward();
+std::vector<at::Tensor> sparse_softmax_cuda_forward();
+std::vector<at::Tensor> sparse_softmax_cuda_backward();
 */
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

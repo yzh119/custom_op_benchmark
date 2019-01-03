@@ -37,7 +37,7 @@ class MaskedMMSimple(Function):
 
 if __name__ == '__main__':
     import os
-    batch_size = 512 
+    batch_size = 20 
     l = 25
     n = batch_size * l
     e = batch_size * (l ** 2)

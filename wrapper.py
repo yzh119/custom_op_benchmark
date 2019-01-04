@@ -37,8 +37,8 @@ class MaskedMMSimple(Function):
 
 if __name__ == '__main__':
     import os
-    batch_size = 20 
-    l = 25
+    batch_size = 512
+    l = 20
     n = batch_size * l
     e = batch_size * (l ** 2)
     v = th.ones(e, dtype=th.uint8)
@@ -89,17 +89,17 @@ if __name__ == '__main__':
     dim = 1024 
     A = th.rand(n, dim, requires_grad=True, device='cuda:0')
     B = th.rand(n, dim, requires_grad=True, device='cuda:0')
-    grad = th.rand(e, device='cuda:0')
+    grad = th.ones(e, device='cuda:0')
     tic = time.time()
     A_e = th.sparse.mm(inc_x.float(), A)
     B_e = th.sparse.mm(inc_y.float(), B)
     O = (A_e * B_e).sum(-1)
-    O_ori = O
+    O_ori = O.clone()
     print('forward elapse time: {}'.format(time.time() - tic))
     tic = time.time()
     O.backward(grad)
     print('backward elapse time: {}'.format(time.time() - tic))
-    A_grad_ori, B_grad_ori = A.grad, B.grad
+    A_grad_ori, B_grad_ori = A.grad.clone(), B.grad.clone()
     A.grad.zero_()
     B.grad.zero_()
 

@@ -1,6 +1,8 @@
 #include <ATen/ATen.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <iostream>
+#include <cassert>
 #include <vector>
 
 /*
@@ -11,8 +13,8 @@
  */
 
 __global__ void maskedmm_forward_kernel(int* __restrict__ row, int* __restrict__ col, float* __restrict__ A, float* __restrict__ B, float* __restrict__ O, int e, int d, int n) {
-    int i = ((((int)blockIdx.x) * 32) + ((int)threadIdx.x));
-    if (((int)blockIdx.x) < (e / 32)) {
+    int i = ((((int)blockIdx.x) * (int)blockDim.x) + ((int)threadIdx.x));
+    if (((int)blockIdx.x) < (e / (int)blockDim.x)) {
         O[i] = 0.000000e+00f;
         for (int k = 0; k < d; ++k) {
             O[i] = (O[i] + (A[((row[i] * d) + k)] * B[(col[i] + (k * n))]));
@@ -35,29 +37,23 @@ __global__ void maskedmm_forward_kernel(int* __restrict__ row, int* __restrict__
  * dB = A @ (dO * adj)
  * Mostly the same as src_mul_edge
  */
-const int mb_block_dim = 512;
-const int mb_thread_dim = 512;
 __global__ void maskedmm_backward_kernel(int* __restrict__ row, int* __restrict__ col, float* __restrict__ A, float* __restrict__ B, float* __restrict__ dO, float* __restrict__ dA, float* __restrict__ dB, int e, int d, int n) {
-    int i = (int)blockIdx.x;
-    int j = (int)threadIdx.x;
-    for (int ki = i; ki < n; ki += mb_block_dim)
-        for (int kj = j; kj < d; kj += mb_thread_dim) {
-            dA[ki * d + kj] = 0;
-            dB[ki * d + kj] = 0;
-        }
+    int j = (int)blockIdx.x * (int)blockDim.x + (int)threadIdx.x;
+    for (int k = 0; k < n; ++k) {
+		dA[k * d + j] = 0;
+		dB[k * d + j] = 0;
+	}
 
-    for (int ki = i; ki < e; ki += mb_block_dim) {
-        float dO_at = dO[ki];
-        for (int kj = 0; kj < d; kj += mb_thread_dim) { 
-            dA[col[ki] * d + kj] += dO_at * B[row[ki] * d + kj];
-            dB[row[ki] * d + kj] += dO_at * A[col[ki] * d + kj];
-        }
+    for (int k = 0; k < e; ++k) {
+		dA[row[k] * d + j] += dO[k] * B[col[k] * d + j];
+		dB[col[k] * d + j] += dO[k] * A[row[k] * d + j];
     }
 }
 
 /*
  * CUDA Kernel of forward function for Sparse Softmax
- * O = softmax(x), reduced by per node.
+ * O = softmax(x), grouped by node.
+ * head, idx: csr format (row-major)
  */
 __global__ void sparse_softmax_forward_kernel(int* __restrict__ head, int* __restrict__ idx, float* __restrict__ x, float* __restrict__ O, int e) {
     float max_val = *x;
@@ -66,28 +62,27 @@ __global__ void sparse_softmax_forward_kernel(int* __restrict__ head, int* __res
         for (int k = head[j]; k < head[j + 1]; ++k)
             max_val = max(max_val, x[idx[k]]);
 
-        float sum = 0;
-        for (int k = head[j]; k < head[j + 1]; ++k) {
-            float now = exp(x[idx[k]] - max_val);
-            O[idx[k]] = now;
-            sum += now;
-        }
+	float sum = 0;
+	for (int k = head[j]; k < head[j + 1]; ++k) {
+		float now = exp(x[idx[k]] - max_val);
+		O[idx[k]] = now;
+		sum += now;
+	}
 
-        for (int k = head[j]; k < head[j + 1]; ++k)
-            O[idx[k]] /= sum;
+	for (int k = head[j]; k < head[j + 1]; ++k)
+		O[idx[k]] /= sum;
     }
 }
 
 /*
  * CUDA Kernel of backward function for Sparse Softmax.
+ * head, idx: csr format (col-major)
  */
-const int ss_thread_dim = 32;
 __global__ void sparse_softmax_backward_kernel(int* __restrict__ head, int* __restrict__ idx, float* __restrict__ dO, float* __restrict__ O, float* __restrict__ dx, int e) {
     int i = (int)blockIdx.x;
     if (i < e) {
         for (int ki = head[i]; ki < head[i + 1]; ++ki) {
-            int j = (int)threadIdx.x;
-            for (int kj = head[i] + j; kj < head[i + 1]; kj += ss_thread_dim) {
+            for (int kj = head[i]; kj < head[i + 1]; ++kj) {
                 dx[idx[kj]] -= dO[idx[ki]] * O[idx[ki]] * O[idx[kj]];
                 if (ki == kj) dx[idx[kj]] += dO[idx[ki]] * O[idx[ki]];
             }
@@ -131,8 +126,8 @@ std::vector<at::Tensor> maskedmm_cuda_backward(
     const auto n = A.size(0);
     const auto d = A.size(1);
 
-    const int threads = mb_thread_dim;
-    const dim3 blocks(mb_block_dim);
+    const int threads = 1024; 
+    const dim3 blocks((d + 1023) / 1024);
 
     auto dA = at::zeros_like(A, A.options());
     auto dB = at::zeros_like(B, B.options());

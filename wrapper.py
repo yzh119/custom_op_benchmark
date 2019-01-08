@@ -89,7 +89,7 @@ if __name__ == '__main__':
     dim = 1024 
     A = th.rand(n, dim, requires_grad=True, device='cuda:0')
     B = th.rand(n, dim, requires_grad=True, device='cuda:0')
-    grad = th.ones(e, device='cuda:0')
+    grad = th.rand(e, device='cuda:0')
     tic = time.time()
     A_e = th.sparse.mm(inc_x.float(), A)
     B_e = th.sparse.mm(inc_y.float(), B)

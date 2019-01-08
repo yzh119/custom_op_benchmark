@@ -83,11 +83,10 @@ __global__ void sparse_softmax_forward_kernel(int* __restrict__ head, int* __res
  * head, idx: csr format
  */
 __global__ void sparse_softmax_backward_kernel(int* __restrict__ head, int* __restrict__ idx, float* __restrict__ dO, float* __restrict__ O, float* __restrict__ dx, int e) {
-    const int threadDimy = 32;
     int i = (int)blockIdx.x * (int)blockDim.x + (int)threadIdx.x;
     int j = (int)threadIdx.y;
     if (i < e) {
-        for (int kj = head[i] + j; kj < head[i + 1]; kj += threadDimy) {
+        for (int kj = head[i] + j; kj < head[i + 1]; kj += (int)blockDim.y) {
             for (int ki = head[i]; ki < head[i + 1]; ++ki) {
                 dx[idx[kj]] -= dO[idx[ki]] * O[idx[ki]] * O[idx[kj]];
                 if (ki == kj) dx[idx[kj]] += dO[idx[ki]] * O[idx[ki]];

@@ -17,31 +17,31 @@ at::Tensor maskedmm_forward(
 }
 
 at::Tensor sparse_softmax_cuda_forward(
-    at::Tensor head,
-    at::Tensor idx,
+    at::Tensor ptr,
+    at::Tensor eid,
     at::Tensor x);
 
 at::Tensor sparse_softmax_forward(
-    at::Tensor head,
-    at::Tensor idx,
+    at::Tensor ptr,
+    at::Tensor eid,
     at::Tensor x) {
     // TyDy: type check
-    return sparse_softmax_cuda_forward(head, idx, x);
+    return sparse_softmax_cuda_forward(ptr, eid, x);
 }
 
 at::Tensor sparse_softmax_cuda_backward(
-    at::Tensor head,
-    at::Tensor idx,
+    at::Tensor ptr,
+    at::Tensor eid,
     at::Tensor y,
     at::Tensor dy);
 
 at::Tensor sparse_softmax_backward(
-    at::Tensor head,
-    at::Tensor idx,
+    at::Tensor ptr,
+    at::Tensor eid,
     at::Tensor y,
     at::Tensor dy) {
     // TyDy: type check
-    return sparse_softmax_cuda_backward(head, idx, y, dy);
+    return sparse_softmax_cuda_backward(ptr, eid, y, dy);
 }
 
 std::vector<at::Tensor> maskedmm_cuda_backward(

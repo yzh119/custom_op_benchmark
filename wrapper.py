@@ -4,27 +4,27 @@ from torch.autograd import Function
 
 class SparseSoftmax(Function):
     @staticmethod
-    def forward(ctx, head, idx, x):
-        y = sparse_softmax_forward(head.int(), idx.int(), x);
-        ctx.save_for_backward(head, idx, y)
+    def forward(ctx, ptr, eid, x):
+        y = sparse_softmax_forward(ptr, eid, x);
+        ctx.save_for_backward(ptr, idx, y)
         return y
 
     @staticmethod
     def backward(ctx, dy):
-        head, idx, y = ctx.saved_tensors
-        return None, None, sparse_softmax_backward(head.int(), idx.int(), y, dy);
+        ptr, eid, y = ctx.saved_tensors
+        return None, None, sparse_softmax_backward(ptr, eid, y, dy);
 
 class MaskedMM(Function):
     @staticmethod
     def forward(ctx, adj, A, B):
         row, col = adj._indices()
         ctx.save_for_backward(row, col, A, B)
-        return maskedmm_forward(row.int(), col.int(), A, B)
+        return maskedmm_forward(row, col, A, B)
 
     @staticmethod
     def backward(ctx, grad):
         row, col, A, B = ctx.saved_tensors
-        dA, dB = maskedmm_backward(row.int(), col.int(), A, B, grad)
+        dA, dB = maskedmm_backward(row, col, A, B, grad)
         return None, dA, dB
 
 class MaskedMMSimple(Function):
@@ -148,9 +148,9 @@ if __name__ == '__main__':
     x_grad = x.grad
     x.grad.zero_()
 
-    head = th.tensor([0, 5, 10, 15, 20, 25], device='cuda:0')
+    ptr = th.tensor([0, 5, 10, 15, 20, 25], device='cuda:0')
     idx = th.arange(25, device='cuda:0')
-    y = SparseSoftmax.apply(head, idx, x)
+    y = SparseSoftmax.apply(ptr, idx, x)
     assert th.allclose(y_ori, y)
     y.backward(grad)
     assert th.allclose(x.grad, x_grad)

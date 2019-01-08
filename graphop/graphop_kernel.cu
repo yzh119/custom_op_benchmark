@@ -1,4 +1,4 @@
-/* TyDys
+/* TODOs
  * segment_reduce_forward, segment_reduce_backward;
  */
 
@@ -43,13 +43,13 @@ __global__ void maskedmm_forward_kernel(int* __restrict__ row, int* __restrict__
 __global__ void maskedmm_backward_kernel(int* __restrict__ row, int* __restrict__ col, float* __restrict__ A, float* __restrict__ B, float* __restrict__ dy, float* __restrict__ dA, float* __restrict__ dB, int e, int d, int n) {
     int j = (int)blockIdx.x * (int)blockDim.x + (int)threadIdx.x;
     for (int k = 0; k < n; ++k) {
-		dA[k * d + j] = 0;
-		dB[k * d + j] = 0;
-	}
+        dA[k * d + j] = 0;
+        dB[k * d + j] = 0;
+    }
 
     for (int k = 0; k < e; ++k) {
-		dA[row[k] * d + j] += dy[k] * B[col[k] * d + j];
-		dB[col[k] * d + j] += dy[k] * A[row[k] * d + j];
+        dA[row[k] * d + j] += dy[k] * B[col[k] * d + j];
+        dB[col[k] * d + j] += dy[k] * A[row[k] * d + j];
     }
 }
 
@@ -65,15 +65,15 @@ __global__ void sparse_softmax_forward_kernel(int* __restrict__ head, int* __res
         for (int k = head[i]; k < head[i + 1]; ++k)
             max_val = max(max_val, x[idx[k]]);
 
-		float sum = 0;
-		for (int k = head[i]; k < head[i + 1]; ++k) {
-			float now = exp(x[idx[k]] - max_val);
-			y[idx[k]] = now;
-			sum += now;
-		}
+        float sum = 0;
+        for (int k = head[i]; k < head[i + 1]; ++k) {
+            float now = exp(x[idx[k]] - max_val);
+            y[idx[k]] = now;
+            sum += now;
+        }
 
-		for (int k = head[i]; k < head[i + 1]; ++k)
-			y[idx[k]] /= sum;
+        for (int k = head[i]; k < head[i + 1]; ++k)
+            y[idx[k]] /= sum;
     }
 }
 

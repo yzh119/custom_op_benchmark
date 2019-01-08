@@ -1,5 +1,6 @@
 /* TODOs
- * segment_reduce_forward, segment_reduce_backward;
+ * - segment_reduce_forward, segment_reduce_backward;
+ * - switch backend from aten to dlpack
  */
 
 #include <ATen/ATen.h>
@@ -44,7 +45,7 @@
  * This is an unoptimized version, to better utilize shared memory, some sort of padding is required.
  * Note that we use the row and col vector to represent the sparse matrix adj. (coo format)
  */
-template <typename idx_t, typename data_t>
+template <class idx_t, class data_t>
 __global__ void maskedmm_forward_kernel(idx_t* __restrict__ row, idx_t* __restrict__ col, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ y, int e, int d, int n) {
     int i = ((((int)blockIdx.x) * (int)blockDim.x) + ((int)threadIdx.x));
     if (((int)blockIdx.x) < (e / (int)blockDim.x)) {

@@ -2,6 +2,18 @@ import torch as th
 from graphop import *
 from torch.autograd import Function
 
+class SparseSoftmax(Function):
+    @staticmethod
+    def forward(ctx, head, idx, x):
+        y = sparse_softmax_forward(head.int(), idx.int(), x);
+        ctx.save_for_backward(head, idx, y)
+        return y
+
+    @staticmethod
+    def backward(ctx, dy):
+        head, idx, y = ctx.saved_tensors
+        return None, None, sparse_softmax_backward(head.int(), idx.int(), y, dy);
+
 class MaskedMM(Function):
     @staticmethod
     def forward(ctx, adj, A, B):
@@ -10,9 +22,9 @@ class MaskedMM(Function):
         return maskedmm_forward(row.int(), col.int(), A, B)
 
     @staticmethod
-    def backward(ctx, grad_o):
+    def backward(ctx, grad):
         row, col, A, B = ctx.saved_tensors
-        dA, dB = maskedmm_backward(row.int(), col.int(), A, B, grad_o)
+        dA, dB = maskedmm_backward(row.int(), col.int(), A, B, grad)
         return None, dA, dB
 
 class MaskedMMSimple(Function):
@@ -22,15 +34,15 @@ class MaskedMMSimple(Function):
             A_e = th.sparse.mm(inc_x.float(), A) # shape: (e, d)
             B_e = th.sparse.mm(inc_y.float(), B) # shape: (e, d)
             ctx.save_for_backward(A_e, B_e, inc_x, inc_y)
-            o = (A_e * B_e).sum(-1) # shape: (e)
-        assert o.requires_grad==False
-        return o
+            y = (A_e * B_e).sum(-1) # shape: (e)
+        assert y.requires_grad==False
+        return y
 
     @staticmethod
-    def backward(ctx, grad_o): # shape: (e)
+    def backward(ctx, grad): # shape: (e)
         A_e, B_e, inc_x, inc_y = ctx.saved_tensors
-        dAe = grad_o.unsqueeze(-1) * B_e
-        dBe = grad_o.unsqueeze(-1) * A_e
+        dAe = grad.unsqueeze(-1) * B_e
+        dBe = grad.unsqueeze(-1) * A_e
         dA = th.sparse.mm(inc_x.t().float(), dAe)
         dB = th.sparse.mm(inc_y.t().float(), dBe)
         return None, None, dA, dB
@@ -93,11 +105,11 @@ if __name__ == '__main__':
     tic = time.time()
     A_e = th.sparse.mm(inc_x.float(), A)
     B_e = th.sparse.mm(inc_y.float(), B)
-    O = (A_e * B_e).sum(-1)
-    O_ori = O.clone()
+    y = (A_e * B_e).sum(-1)
+    y_ori = y.clone()
     print('forward elapse time: {}'.format(time.time() - tic))
     tic = time.time()
-    O.backward(grad)
+    y.backward(grad)
     print('backward elapse time: {}'.format(time.time() - tic))
     A_grad_ori, B_grad_ori = A.grad.clone(), B.grad.clone()
     A.grad.zero_()
@@ -105,11 +117,11 @@ if __name__ == '__main__':
 
     print('simple implementation, hand-crafted autograd')
     tic = time.time()
-    O = MaskedMMSimple.apply(inc_x, inc_y, A, B)
+    y = MaskedMMSimple.apply(inc_x, inc_y, A, B)
     print('forward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(O, O_ori)
+    assert th.allclose(y, y_ori)
     tic = time.time()
-    O.backward(grad)
+    y.backward(grad)
     print('backward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(A.grad, A_grad_ori) and th.allclose(B.grad, B_grad_ori)
     A.grad.zero_()
@@ -117,10 +129,29 @@ if __name__ == '__main__':
    
     print('custom kernel')
     tic = time.time()
-    O = MaskedMM.apply(adj, A, B)
+    y = MaskedMM.apply(adj, A, B)
     print('forward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(O, O_ori)
+    assert th.allclose(y, y_ori)
     tic = time.time()
-    O.backward(grad)
+    y.backward(grad)
     print('backward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(A.grad, A_grad_ori)
+
+    # ------------------------------------------------------------------------
+    # Test sparse softmax
+    # ------------------------------------------------------------------------
+    x = th.rand(5 * 5, requires_grad=True, device='cuda:0')
+    y = th.softmax(x.view(5, 5), dim=-1).view(-1)
+    y_ori = y
+    grad = th.rand(5 * 5, device='cuda:0')
+    y.backward(grad)
+    x_grad = x.grad
+    x.grad.zero_()
+
+    head = th.tensor([0, 5, 10, 15, 20, 25], device='cuda:0')
+    idx = th.arange(25, device='cuda:0')
+    y = SparseSoftmax.apply(head, idx, x)
+    assert th.allclose(y_ori, y)
+    y.backward(grad)
+    assert th.allclose(x.grad, x_grad)
+

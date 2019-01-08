@@ -7,14 +7,41 @@ at::Tensor maskedmm_cuda_forward(
     at::Tensor A,
     at::Tensor B);
 
-// To implement the function masked matrix multiplication.
 at::Tensor maskedmm_forward(
     at::Tensor row,
     at::Tensor col,
     at::Tensor A,
     at::Tensor B) {
-    // TODO: Check type
+    // TyDy: type check
     return maskedmm_cuda_forward(row, col, A, B);
+}
+
+at::Tensor sparse_softmax_cuda_forward(
+    at::Tensor head,
+    at::Tensor idx,
+    at::Tensor x);
+
+at::Tensor sparse_softmax_forward(
+    at::Tensor head,
+    at::Tensor idx,
+    at::Tensor x) {
+    // TyDy: type check
+    return sparse_softmax_cuda_forward(head, idx, x);
+}
+
+at::Tensor sparse_softmax_cuda_backward(
+    at::Tensor head,
+    at::Tensor idx,
+    at::Tensor y,
+    at::Tensor dy);
+
+at::Tensor sparse_softmax_backward(
+    at::Tensor head,
+    at::Tensor idx,
+    at::Tensor y,
+    at::Tensor dy) {
+    // TyDy: type check
+    return sparse_softmax_cuda_backward(head, idx, y, dy);
 }
 
 std::vector<at::Tensor> maskedmm_cuda_backward(
@@ -22,30 +49,21 @@ std::vector<at::Tensor> maskedmm_cuda_backward(
     at::Tensor col,
     at::Tensor A,
     at::Tensor B,
-    at::Tensor dO);
+    at::Tensor dy);
 
 std::vector<at::Tensor> maskedmm_backward(
     at::Tensor row,
     at::Tensor col,
     at::Tensor A,
     at::Tensor B,
-    at::Tensor dO) {
-    // TODO: check type
-    return maskedmm_cuda_backward(row, col, A, B, dO);
+    at::Tensor dy) {
+    // TyDy: check type
+    return maskedmm_cuda_backward(row, col, A, B, dy);
 }
-
-/*
-std::vector<at::Tensor> sparse_softmax_cuda_forward();
-std::vector<at::Tensor> sparse_softmax_cuda_backward();
-std::vector<at::Tensor> sparse_softmax_cuda_forward();
-std::vector<at::Tensor> sparse_softmax_cuda_backward();
-*/
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("maskedmm_forward", &maskedmm_forward, "Masked Matrix Multiplication forward");
     m.def("maskedmm_backward", &maskedmm_backward, "Masked Matrix Multiplication backward");
-    // m.def("sparse_softmax_scatter_forward", &sparse_softmax_scatter_cuda_forward, "Sparse Softmax(scatter) forward");
-    // m.def("sparse_softmax_scatter_backward", &sparse_softmax_scatter_cuda_backward, "Sparse Softmax(scatter) backward");
-    // m.def("sparse_softmax_gather_forward", &sparse_softmax_gather_cuda_forward, "Sparse Softmax(gather) forward");
-    // m.def("sparse_softmax_gather_backward", &sparse_softmax_gather_cuda_backward, "Sparse Softmax(gather) backward");
+    m.def("sparse_softmax_forward", &sparse_softmax_forward, "Sparse softmax forward");
+    m.def("sparse_softmax_backward", &sparse_softmax_backward, "Sparse softmax backward");
 }

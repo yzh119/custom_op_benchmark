@@ -47,21 +47,13 @@
  */
 template <class idx_t, class data_t>
 __global__ void maskedmm_forward_kernel(idx_t* __restrict__ row, idx_t* __restrict__ col, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ y, int e, int d, int n) {
-    int i = ((((int)blockIdx.x) * (int)blockDim.x) + ((int)threadIdx.x));
-    if (((int)blockIdx.x) < (e / (int)blockDim.x)) {
-        y[i] = 0.000000e+00f;
+    int i = (((blockIdx.x) * blockDim.x) + (threadIdx.x));
+    if (i < e) {
+        float sum = 0;
         for (int k = 0; k < d; ++k) {
-            y[i] = (y[i] + (A[((row[i] * d) + k)] * B[(col[i] + (k * n))]));
+            sum += A[row[i] * d + k] * B[col[i] + (k * n)];
         }
-    } else {
-        if (i < e) {
-            y[i] = 0.000000e+00f;
-        }
-        for (int k = 0; k < d; ++k) {
-            if (i < e) {
-                y[i] = (y[i] + (A[((row[i] * d) + k)] * B[(col[i] + (k * n))]));
-            }
-        }
+        y[i] = sum;
     }
 }
 
@@ -73,12 +65,11 @@ __global__ void maskedmm_forward_kernel(idx_t* __restrict__ row, idx_t* __restri
  */
 template <class idx_t, class data_t>
 __global__ void maskedmm_backward_kernel(idx_t* __restrict__ row, idx_t* __restrict__ col, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ dy, data_t* __restrict__ dA, data_t* __restrict__ dB, int e, int d, int n) {
-    int j = (int)blockIdx.x * (int)blockDim.x + (int)threadIdx.x;
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
     for (int k = 0; k < n; ++k) {
         dA[k * d + j] = 0;
         dB[k * d + j] = 0;
     }
-
     for (int k = 0; k < e; ++k) {
         dA[row[k] * d + j] += dy[k] * B[col[k] * d + j];
         dB[col[k] * d + j] += dy[k] * A[row[k] * d + j];
@@ -86,11 +77,22 @@ __global__ void maskedmm_backward_kernel(idx_t* __restrict__ row, idx_t* __restr
 }
 
 /*
- * CUDA Kernel of the backward function for Masked Matrix Multiplication. (argument: csr format)
- * TODO
+ * CUDA Kernel of the forward function for Masked Matrix Multiplication. (argument: csr format)
  */
 template <class idx_t, class data_t>
-__global__ void maskedmm_backward_kernel_csr(idx_t* ptr_row, idx_t* eid_row, idx_t* ptr_col, idx_t* eid_col, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ dy, data_t* __restrict__ dA, data_t* __restrict__ dB, int e, int d, int n) {}
+__global__ void maskedmm_forward_kernel_csr(idx_t* __restrict__ ptr, idx_t* __restrict__ eid, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ y, int e, int d, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x; 
+    int j = blockIdx.y;
+    __shared__ float B0[32], B1[32];
+//  TODO 
+}
+
+
+/*
+ * CUDA Kernel of the backward function for Masked Matrix Multiplication. (argument: csr format)
+ */
+template <class idx_t, class data_t>
+__global__ void maskedmm_backward_kernel_csr(idx_t* __restrict__ ptr_row, idx_t* __restrict__ eid_row, idx_t* __restrict__ ptr_col, idx_t* __restrict__ eid_col, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ dy, data_t* __restrict__ dA, data_t* __restrict__ dB, int e, int d, int n) {}
 
 /*
  * CUDA Kernel of forward function for Sparse Softmax
@@ -100,7 +102,7 @@ __global__ void maskedmm_backward_kernel_csr(idx_t* ptr_row, idx_t* eid_row, idx
 template <class idx_t, class data_t>
 __global__ void sparse_softmax_forward_kernel(idx_t* __restrict__ ptr, idx_t* __restrict__ eid, data_t* __restrict__ x, data_t* __restrict__ y, int n) {
     float max_val = *x;
-    int i = (int)blockIdx.x * (int)blockDim.x + (int)threadIdx.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {
         for (int k = ptr[i]; k < ptr[i + 1]; ++k)
             max_val = max(max_val, x[eid[k]]);
@@ -123,14 +125,16 @@ __global__ void sparse_softmax_forward_kernel(idx_t* __restrict__ ptr, idx_t* __
  */
 template <class idx_t, class data_t>
 __global__ void sparse_softmax_backward_kernel(idx_t* __restrict__ ptr, idx_t* __restrict__ eid, data_t* __restrict__ dy, data_t* __restrict__ y, data_t* __restrict__ dx, int n) {
-    int i = (int)blockIdx.x * (int)blockDim.x + (int)threadIdx.x;
-    int j = (int)threadIdx.y;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = threadIdx.y;
     if (i < n) {
-        for (int kj = ptr[i] + j; kj < ptr[i + 1]; kj += (int)blockDim.y) {
+        for (int kj = ptr[i] + j; kj < ptr[i + 1]; kj += blockDim.y) {
+            float dsum = 0;
             for (int ki = ptr[i]; ki < ptr[i + 1]; ++ki) {
-                dx[eid[kj]] -= dy[eid[ki]] * y[eid[ki]] * y[eid[kj]];
-                if (ki == kj) dx[eid[kj]] += dy[eid[ki]] * y[eid[ki]];
+                dsum -= dy[eid[ki]] * y[eid[ki]] * y[eid[kj]];
+                if (ki == kj) dsum += dy[eid[ki]] * y[eid[ki]];
             }
+            dx[eid[kj]] = dsum;
         }
     }
 }

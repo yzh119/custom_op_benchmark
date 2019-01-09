@@ -50,7 +50,7 @@ class MaskedMMSimple(Function):
 if __name__ == '__main__':
     import os
     batch_size = 512
-    l = 20
+    l = 30
     n = batch_size * l
     e = batch_size * (l ** 2)
     v = th.ones(e, dtype=th.uint8)
@@ -142,10 +142,10 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------------
     x = th.rand(5 * 5, requires_grad=True, device='cuda:0')
     y = th.softmax(x.view(5, 5), dim=-1).view(-1)
-    y_ori = y
+    y_ori = y.clone()
     grad = th.rand(5 * 5, device='cuda:0')
     y.backward(grad)
-    x_grad = x.grad
+    x_grad = x.grad.clone()
     x.grad.zero_()
 
     ptr = th.tensor([0, 5, 10, 15, 20, 25], device='cuda:0')

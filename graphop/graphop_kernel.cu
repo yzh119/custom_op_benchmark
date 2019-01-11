@@ -41,7 +41,7 @@
 
 /*
  * CUDA Kernel of the forward function for Masked Matrix Multiplication:
- * y = adj * (A @ B)
+ * y = adj * (A @ B^T)
  * This is an unoptimized version, to better utilize shared memory, some sort of padding is required.
  * Note that we use the row and col vector to represent the sparse matrix adj. (coo format)
  */

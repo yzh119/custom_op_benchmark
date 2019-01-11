@@ -6,7 +6,7 @@ class SparseSoftmax(Function):
     @staticmethod
     def forward(ctx, ptr, eid, x):
         y = sparse_softmax_forward(ptr, eid, x);
-        ctx.save_for_backward(ptr, idx, y)
+        ctx.save_for_backward(ptr, eid, y)
         return y
 
     @staticmethod
@@ -176,6 +176,21 @@ if __name__ == '__main__':
     A.grad.zero_()
     B.grad.zero_()
 
+    print('vanilla bmm')
+    tic = time.time()
+    y = (A.view(batch_size, l, dim) @ B.view(batch_size, l, dim).transpose(-1, -2)).view(-1)
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(y, y_ori)
+    tic = time.time()
+    y.backward(grad)
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(A.grad, A_grad_ori) and th.allclose(B.grad, B_grad_ori)
+    A.grad.zero_()
+    B.grad.zero_()
+
+
     print('custom kernel(csr)')
     tic = time.time()
     y = MaskedMMCSR.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B)
@@ -191,18 +206,59 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------------
     # Test sparse softmax
     # ------------------------------------------------------------------------
-    x = th.rand(5 * 5, requires_grad=True, device='cuda:0')
-    y = th.softmax(x.view(5, 5), dim=-1).view(-1)
-    y_ori = y.clone()
-    grad = th.rand(5 * 5, device='cuda:0')
+    print('------------------------------------')
+    print('vanilla softmax(reduce)')
+    tic = time.time()
+    x = th.rand(e, requires_grad=True, device='cuda:0')
+    y = th.softmax(x.view(batch_size, l, l), -1).view(-1)
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    tic = time.time()
+    y_ori = y.clone() 
     y.backward(grad)
-    x_grad = x.grad.clone()
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    x_grad_ori = x.grad.clone()
+    x.grad.zero_()
+    
+    print('custom softmax(reduce)')
+    tic = time.time()
+    y = SparseSoftmax.apply(ptr_r, eid_r, x)
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(y_ori, y) 
+    tic = time.time() 
+    y.backward(grad)
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
-    ptr = th.tensor([0, 5, 10, 15, 20, 25], device='cuda:0')
-    idx = th.arange(25, device='cuda:0')
-    y = SparseSoftmax.apply(ptr, idx, x)
-    assert th.allclose(y_ori, y)
+    print('vanilla softmax(scatter)')
+    tic = time.time()
+    x = th.rand(e, requires_grad=True, device='cuda:0')
+    y = th.softmax(x.view(batch_size, l, l), -2).view(-1)
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    tic = time.time()
+    y_ori = y.clone() 
     y.backward(grad)
-    assert th.allclose(x.grad, x_grad)
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    x_grad_ori = x.grad.clone()
+    x.grad.zero_()
+    
+    print('custom softmax(scatter)')
+    tic = time.time()
+    y = SparseSoftmax.apply(ptr_c, eid_c, x)
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(y_ori, y) 
+    tic = time.time() 
+    y.backward(grad)
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
+    x.grad.zero_()
+
 

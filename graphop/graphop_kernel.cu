@@ -46,14 +46,17 @@
  * Note that we use the row and col vector to represent the sparse matrix adj. (coo format)
  */
 template <class idx_t, class data_t>
-__global__ void maskedmm_forward_kernel(idx_t* __restrict__ row, idx_t* __restrict__ col, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ y, int e, int d, int n) {
+__global__ void maskedmm_forward_kernel(idx_t* __restrict__ row, idx_t* __restrict__ col, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ y, int e, int d, int n, int h) {
     int i = (((blockIdx.x) * blockDim.x) + (threadIdx.x));
     if (i < e) {
         data_t sum = 0;
         for (int k = 0; k < d; ++k) {
             sum += A[row[i] * d + k] * B[col[i] + (k * n)];
+            if ((k + 1) * h % d == 0) {
+                y[i * h + (k + 1) * h / d - 1] = sum;       
+                sum = 0;
+            }
         }
-        y[i] = sum;
     }
 }
 
@@ -181,11 +184,13 @@ at::Tensor maskedmm_cuda_forward(
     at::Tensor col,
     at::Tensor A,
     at::Tensor B) {
-    // row, col: (e); A, B: (n, d); y: (e)
+    // row, col: (e); A, B: (n, d, h); y: (e, h)
     const auto e = row.size(0);
     const auto n = A.size(0);
     const auto d = A.size(1);
-    auto y = at::zeros({e}, A.options());
+    const auto h = (A.dim() == 2) ? 1: A.size(2);
+    printf("%d\n", h);
+    auto y = at::zeros({e, h}, A.options());
 
     const int threads = 32;
     const dim3 blocks((e + threads - 1) / threads);
@@ -198,7 +203,7 @@ at::Tensor maskedmm_cuda_forward(
             A.data<data_t>(),
             Bt.data<data_t>(),
             y.data<data_t>(),
-            e, d, n);
+            e, d, n, h);
     }));
     return y;
 }

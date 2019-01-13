@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     print('Single Head \n===========================================')
     print('simple implementation')
-    dim = 1024
+    dim = 1100
     A = th.rand(n, dim, requires_grad=True, device='cuda:0')
     B = th.rand(n, dim, requires_grad=True, device='cuda:0')
     grad = th.rand(e, device='cuda:0')
@@ -260,9 +260,9 @@ if __name__ == '__main__':
     assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
-    print('Multi Head \n===========================================')
+    print('\nMulti Head \n===========================================')
     print('simple implementation')
-    dim = 128
+    dim = 64
     h = 8
     A = th.rand(n, dim * h, requires_grad=True, device='cuda:0')
     B = th.rand(n, dim * h, requires_grad=True, device='cuda:0')
@@ -297,10 +297,9 @@ if __name__ == '__main__':
     A.grad.zero_()
     B.grad.zero_()
 
-"""
     print('vanilla bmm')
     tic = time.time()
-    y = (A.view(batch_size, l, dim) @ B.view(batch_size, l, dim).transpose(-1, -2)).view(-1)
+    y = (A.view(batch_size, l, h, dim).contiguous().transpose(1, 2) @ B.view(batch_size, l, h, dim).contiguous().permute(0, 2, 3, 1)).permute(0, 2, 3, 1).contiguous().view(-1, h)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y, y_ori)
@@ -314,7 +313,7 @@ if __name__ == '__main__':
 
     print('custom kernel(csr)')
     tic = time.time()
-    y = MaskedMMCSR.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B)
+    y = MaskedMMCSR.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A.view(-1, h, dim), B.view(-1, h, dim))
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y, y_ori)
@@ -330,8 +329,8 @@ if __name__ == '__main__':
     print('------------------------------------')
     print('vanilla softmax(reduce)')
     tic = time.time()
-    x = th.rand(e, requires_grad=True, device='cuda:0')
-    y = th.softmax(x.view(batch_size, l, l), -1).view(-1)
+    x = th.rand(e, h, requires_grad=True, device='cuda:0')
+    y = th.softmax(x.view(batch_size, l, l, h), -2).view(-1, h)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     tic = time.time()
@@ -357,8 +356,8 @@ if __name__ == '__main__':
 
     print('vanilla softmax(scatter)')
     tic = time.time()
-    x = th.rand(e, requires_grad=True, device='cuda:0')
-    y = th.softmax(x.view(batch_size, l, l), -2).view(-1)
+    x = th.rand(e, h, requires_grad=True, device='cuda:0')
+    y = th.softmax(x.view(batch_size, l, l, h), -3).view(-1, h)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     tic = time.time()
@@ -381,4 +380,3 @@ if __name__ == '__main__':
     print('backward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
-"""

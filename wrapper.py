@@ -127,9 +127,9 @@ if __name__ == '__main__':
     adj = adj.cuda()
     eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = eid_r.cuda(), eid_c.cuda(), ptr_r.cuda(), ptr_c.cuda(), nid_r.cuda(), nid_c.cuda()
 
-    print('Single Head \n===========================================')
-    print('simple implementation')
-    dim = 1100
+    print('Single Head (batch size: 512, length: 30, dim:1024)\n===========================================')
+    print('MaskedNN(src_dot_dst)\nsimple implementation(copy to edge)')
+    dim = 1024
     A = th.rand(n, dim, requires_grad=True, device='cuda:0')
     B = th.rand(n, dim, requires_grad=True, device='cuda:0')
     grad = th.rand(e, device='cuda:0')
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     A.grad.zero_()
     B.grad.zero_()
 
-    print('custom kernel')
+    print('custom kernel(coo)')
     tic = time.time()
     y = MaskedMM.apply(adj, A, B)
     th.cuda.synchronize()
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     # Test sparse softmax
     # ------------------------------------------------------------------------
     print('------------------------------------')
-    print('vanilla softmax(reduce)')
+    print('vanilla softmax(scatter)')
     tic = time.time()
     x = th.rand(e, requires_grad=True, device='cuda:0')
     y = th.softmax(x.view(batch_size, l, l), -1).view(-1)
@@ -220,7 +220,7 @@ if __name__ == '__main__':
     x_grad_ori = x.grad.clone()
     x.grad.zero_()
     
-    print('custom softmax(reduce)')
+    print('custom softmax(scatter)')
     tic = time.time()
     y = SparseSoftmax.apply(ptr_r, eid_r, x)
     th.cuda.synchronize()
@@ -233,7 +233,7 @@ if __name__ == '__main__':
     assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
-    print('vanilla softmax(scatter)')
+    print('vanilla softmax(gather)')
     tic = time.time()
     x = th.rand(e, requires_grad=True, device='cuda:0')
     y = th.softmax(x.view(batch_size, l, l), -2).view(-1)
@@ -247,7 +247,7 @@ if __name__ == '__main__':
     x_grad_ori = x.grad.clone()
     x.grad.zero_()
     
-    print('custom softmax(scatter)')
+    print('custom softmax(gather)')
     tic = time.time()
     y = SparseSoftmax.apply(ptr_c, eid_c, x)
     th.cuda.synchronize()
@@ -260,8 +260,8 @@ if __name__ == '__main__':
     assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
-    print('\nMulti Head \n===========================================')
-    print('simple implementation')
+    print('\nMulti Head (batch size: 512, length: 30, head: 8, dim:64)\n===========================================')
+    print('MaskedNN(src_dot_dst)\nsimple implementation(copy to edge)')
     dim = 64
     h = 8
     A = th.rand(n, dim * h, requires_grad=True, device='cuda:0')
@@ -283,7 +283,7 @@ if __name__ == '__main__':
     B.grad.zero_()
 
 
-    print('custom kernel')
+    print('custom kernel(coo)')
     tic = time.time()
     y = MaskedMM.apply(adj, A.view(-1, h, dim), B.view(-1, h, dim))
     th.cuda.synchronize()
@@ -327,7 +327,7 @@ if __name__ == '__main__':
     # Test sparse softmax
     # ------------------------------------------------------------------------
     print('------------------------------------')
-    print('vanilla softmax(reduce)')
+    print('vanilla softmax(scatter)')
     tic = time.time()
     x = th.rand(e, h, requires_grad=True, device='cuda:0')
     y = th.softmax(x.view(batch_size, l, l, h), -2).view(-1, h)
@@ -341,7 +341,7 @@ if __name__ == '__main__':
     x_grad_ori = x.grad.clone()
     x.grad.zero_()
     
-    print('custom softmax(reduce)')
+    print('custom softmax(scatter)')
     tic = time.time()
     y = SparseSoftmax.apply(ptr_r, eid_r, x)
     th.cuda.synchronize()
@@ -354,7 +354,7 @@ if __name__ == '__main__':
     assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
-    print('vanilla softmax(scatter)')
+    print('vanilla softmax(gather)')
     tic = time.time()
     x = th.rand(e, h, requires_grad=True, device='cuda:0')
     y = th.softmax(x.view(batch_size, l, l, h), -3).view(-1, h)
@@ -368,7 +368,7 @@ if __name__ == '__main__':
     x_grad_ori = x.grad.clone()
     x.grad.zero_()
     
-    print('custom softmax(scatter)')
+    print('custom softmax(gather)')
     tic = time.time()
     y = SparseSoftmax.apply(ptr_c, eid_c, x)
     th.cuda.synchronize()

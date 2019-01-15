@@ -110,4 +110,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("maskedmm_csr_backward", &maskedmm_csr_backward, "Masked Matrix Multiplication backward(CSR Format)");
     m.def("sparse_softmax_forward", &sparse_softmax_forward, "Sparse softmax forward");
     m.def("sparse_softmax_backward", &sparse_softmax_backward, "Sparse softmax backward");
+    m.def("vector_spmv_forward", &vector_spmv_forward, "Vectorized SPMV forward");
+    m.def("vector_spmv_backward", &vector_spmv_backward, "Vectorized SPMV backward");
 }

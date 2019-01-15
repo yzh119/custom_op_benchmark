@@ -25,8 +25,8 @@
       }                                                                     \
       default:                                                              \
         AT_ERROR(#NAME, " not implemented for '", dtype.toString(), "'");   \
-    }                                                                       \
-  }
+    }                                                                       \ 
+}
 
 #define AT_DISPATCH_IDX_DATA_TYPES(ITYPE, DTYPE, NAME, ...)                             \
   [&] {                                                                                 \
@@ -118,6 +118,58 @@ __global__ void maskedmm_csr_backward_kernel(idx_t* __restrict__ ptr_r, idx_t* _
             for (int k = ptr_c[i]; k < ptr_c[i + 1]; ++k)
                 sum += dy[eid_c[k] * h + j / d] * A[nid_c[k] * d * h + j];
             dB[i * d * h + j] = sum;
+        }
+    }
+}
+
+/*
+ * CUDA Kernel of the forward function for Source Multiply Edge Function.
+ * For `src_mul_edge` operation, the arguments are csr(column-major) representations.
+ */
+template <class idx_t, class data_t>
+__global__ void vector_spmv_forward_kernel(idx_t* __restrict__ ptr, idx_t* __restrict__ eid, idx_t* __restrict__ nid, data_t* __restrict__ edata, data_t* __restrict__ x, data_t* __restrict__ y, int d, int n, int h) {
+    int i = blockIdx.x;
+    int tx = threadIdx.x;
+    if (i < n) {
+        for (int j = tx; j < d * h; j += blockDim.x) {
+            data_t sum = 0;
+            for (int k = ptr_c[i]; k < ptr[i + 1]; ++k)
+                sum += edata[eid[k] * h + j / d] * x[nid[k] * d * h + j];
+            y[i * d * h + j] = sum;
+        }
+    }
+}
+
+/*
+ * CUDA Kernel of the backward function for Source Multiply Edge Function.
+ * For `src_mul_edge` operation, the arguments are csr(row-major) representations.
+ */
+template <class idx_t, class data_t>
+__global__ void vector_spmv_backward_kernel_0(idx_t* __restrict__ ptr, idx_t* __restrict__ eid, idx_t* __restrict__ nid, data_t* __restrict__ dy, data_t* __restrict__ x, data_t* __restrict__ dedata, int d, int n, int h) {
+    int i = blockIdx.x; 
+    int tx = threadIdx.x;
+    if (i < n) {
+        for (int j = ptr[i] + tx; j < ptr[i + 1]; j += blockDim.x)
+            for (int ko = 0; ko < h; ++ko) {
+                data_t sum = 0;
+                for (int ki = 0; ki < d; ++ki) {
+                    sum += x[(i * h + ko) * d + ki] * dy[(ko * d + ki) * n + nid[j]];
+                }
+                dedata[eid[j] * h + ko] = sum;
+            }
+    }
+}
+
+template <class idx_t, class data_t>
+__global__ void vector_spmv_backward_kernel_1(idx_t* __restrict__ ptr, idx_t* __restrict__ eid, idx_t* __restrict__ nid, data_t* __restrict__ edata, data_t* __restrict__ dy, data_t* __restrict__ dx, int d, int n, int h) {
+    int i = blockIdx.x; 
+    int tx = threadIdx.x;
+    if (i < n) {
+        for (int j = tx; j < d * h; j += blockDim.x) {
+            data_t sum = 0;
+            for (int k = ptr_c[i]; k < ptr[i + 1]; ++k)
+                sum += edata[eid[k] * h + j / d] * dy[nid[k] * d * h + j];
+            dx[i * d * h + j] = sum;
         }
     }
 }
@@ -354,4 +406,25 @@ at::Tensor sparse_softmax_cuda_backward(
             n, h); 
     }));
     return dx;
+}
+
+at::Tensor vector_spmv_forward(
+    at::Tensor ptr,
+    at::Tensor eid,
+    at::Tensor nid,
+    at::Tensor edata,
+    at::Tensor x) {
+    // ptr: (n + 1); eid, nid: (e); edata: (e) or (e, h); x: (n, d) or (n, h, d);
+    // TODO
+}
+
+std::vector<at::Tensor> vector_spmv_backward(
+    at::Tensor ptr,
+    at::Tensor eid,
+    at::Tensor nid,
+    at::Tensor edata,
+    at::Tensor dy,
+    at::Tensor x) {
+    // ptr: (n + 1); eid, nid: (e); edata: (e) or (e, h); dy, x: (n, d) or (n, h, d); 
+    // TODO
 }

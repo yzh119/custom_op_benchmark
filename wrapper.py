@@ -5,14 +5,14 @@ from torch.autograd import Function
 class SparseSoftmax(Function):
     @staticmethod
     def forward(ctx, ptr, eid, x):
-        y = sparse_softmax_forward(ptr, eid, x);
+        y = sparse_softmax_forward(ptr, eid, x)
         ctx.save_for_backward(ptr, eid, y)
         return y
 
     @staticmethod
     def backward(ctx, dy):
         ptr, eid, y = ctx.saved_tensors
-        return None, None, sparse_softmax_backward(ptr, eid, y, dy);
+        return None, None, sparse_softmax_backward(ptr, eid, y, dy)
 
 class MaskedMM(Function):
     @staticmethod
@@ -38,6 +38,19 @@ class MaskedMMCSR(Function):
         ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B = ctx.saved_tensors
         dA, dB = maskedmm_csr_backward(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B, grad)
         return None, None, None, None, None, None, dA, dB
+
+class VectorSPMM(Function):
+    @staticmethod
+    def forward(ctx, ptr, eid, nid, ptr_t, eid_t, nid_t, edata, x):
+        y = vector_spmm_forward(ptr, eid, nid, edata, x)
+        ctx.save_for_backward(ptr, eid, nid, ptr_t, eid_t, nid_t, edata, x)
+        return y
+
+    @staticmethod
+    def backward(ctx, dy):
+        ptr, eid, nid, ptr_t, eid_t, nid_t, edata, x = ctx.saved_tensors
+        dedata, dx = vector_spmm_backward(ptr, eid, nid, ptr_t, eid_t, nid_t, edata, dy, x)
+        return None, None, None, None, None, None, dedata, dx
 
 class MaskedMMSimple(Function):
     @staticmethod
@@ -101,6 +114,8 @@ if __name__ == '__main__':
         i, eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = th.load('i.pt')
 
     adj = th.sparse.ByteTensor(i, v, th.Size([n, n]))
+    adj_1 = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda()
+    adj_1.requires_grad_(True)
 
     if not os.path.exists('ix.pt'):
         i_x = th.zeros(2, e, dtype=th.long)
@@ -260,6 +275,41 @@ if __name__ == '__main__':
     assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
+    print('------------------------------------')
+    print("spmm")
+    A.grad.zero_()
+    grad = th.rand(n, dim, device='cuda:0')
+    tic = time.time()
+    y = th.sparse.mm(adj_1, A)
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    y_ori = y.clone()
+    tic = time.time()
+    y.backward(grad)
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    A_grad_ori = A.grad.clone()
+    adj_grad_ori = adj_1.grad._values()
+    A.grad.zero_()
+    adj_1.grad.zero_()
+
+    print("vector-spmm(custom)")
+    tic = time.time()
+    val = adj_1._values()
+    val.requires_grad_(True)
+    y = VectorSPMM.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, val, A)
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic)) 
+    assert th.allclose(y_ori, y)
+    tic = time.time()
+    y.backward(grad)
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(A_grad_ori, A.grad) and th.allclose(val.grad, adj_grad_ori)
+
+    """
+    Multi Head Test
+    """
     print('\nMulti Head (batch size: 512, length: 30, head: 8, dim:64)\n===========================================')
     print('MaskedNN(src_dot_dst)\nsimple implementation(copy to edge)')
     dim = 64

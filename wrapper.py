@@ -114,7 +114,7 @@ if __name__ == '__main__':
         i, eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = th.load('i.pt')
 
     adj = th.sparse.ByteTensor(i, v, th.Size([n, n]))
-    adj_1 = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda()
+    adj_1 = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda().coalesce()
     adj_1.requires_grad_(True)
 
     if not os.path.exists('ix.pt'):
@@ -142,7 +142,7 @@ if __name__ == '__main__':
     adj = adj.cuda()
     eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = eid_r.cuda(), eid_c.cuda(), ptr_r.cuda(), ptr_c.cuda(), nid_r.cuda(), nid_c.cuda()
 
-    print('Single Head (batch size: 512, length: 30, dim:1024)\n===========================================')
+    print('Single Head (batch size: 512, length: 30, dim: 1024)\n===========================================')
     print('MaskedNN(src_dot_dst)\nsimple implementation(copy to edge)')
     dim = 1024
     A = th.rand(n, dim, requires_grad=True, device='cuda:0')
@@ -276,7 +276,7 @@ if __name__ == '__main__':
     x.grad.zero_()
 
     print('------------------------------------')
-    print("spmm")
+    print("spmm(pytorch coalesce)")
     A.grad.zero_()
     grad = th.rand(n, dim, device='cuda:0')
     tic = time.time()
@@ -331,7 +331,6 @@ if __name__ == '__main__':
     A_grad_ori, B_grad_ori = A.grad.clone(), B.grad.clone()
     A.grad.zero_()
     B.grad.zero_()
-
 
     print('custom kernel(coo)')
     tic = time.time()
@@ -430,3 +429,45 @@ if __name__ == '__main__':
     print('backward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
+
+    adjs = []
+    for index in range(8):
+        adj_index = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda().coalesce()
+        adj_index.requires_grad_(True)
+        adjs.append(adj_index)
+
+    print('------------------------------------')
+    print("spmm(pytorch coalesce)")
+    A.grad.zero_()
+    grad = [th.rand(n, dim, device='cuda:0') for _ in range(8)]
+    tic = time.time()
+    ys = []
+    for index in range(8):
+        ys.append(th.sparse.mm(adjs[index], A.view(n, h, dim)[:, index, :]))
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    y_ori = th.cat([y.clone().view(n, 1, dim) for y in ys], dim=-2)
+    tic = time.time()
+    for index in range(8):
+        ys[index].backward(grad[index])
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    A_grad_ori = A.grad.clone()
+    adj_grad_ori = th.cat([_.grad._values().view(e, 1) for _ in adjs], dim=-1)
+    A.grad.zero_()
+    for index in range(8):
+        adjs[index].grad.zero_()
+
+    print("vector-spmm(custom)")
+    val = th.cat([_._values().view(-1, 1) for _ in adjs], dim=-1)
+    val.requires_grad_(True)
+    tic = time.time()
+    y = VectorSPMM.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, val, A.view(n, h, dim))
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic)) 
+    assert th.allclose(y_ori, y)
+    tic = time.time()
+    y.backward(th.cat([_.view(n, 1, dim) for _ in grad], dim=-2))
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(A_grad_ori, A.grad) and th.allclose(val.grad, adj_grad_ori)

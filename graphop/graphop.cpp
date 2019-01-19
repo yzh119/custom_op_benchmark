@@ -1,6 +1,10 @@
 #include <torch/torch.h>
 #include <vector>
 
+#define CHECK_CUDA(x) AT_ASSERTM(x.type().is_cuda(), #x " must be a CUDA tensor")
+#define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x " must be contiguous")
+#define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
+
 at::Tensor maskedmm_cuda_forward(
     at::Tensor row,
     at::Tensor col,
@@ -12,7 +16,10 @@ at::Tensor maskedmm_forward(
     at::Tensor col,
     at::Tensor A,
     at::Tensor B) {
-    // TODO: type check
+    CHECK_INPUT(row);
+    CHECK_INPUT(col);
+    CHECK_INPUT(A);
+    CHECK_INPUT(B);
     return maskedmm_cuda_forward(row, col, A, B);
 }
 
@@ -29,7 +36,11 @@ at::Tensor maskedmm_csr_forward(
     at::Tensor nid,
     at::Tensor A,
     at::Tensor B) {
-    // TODO: type check
+    CHECK_INPUT(ptr);
+    CHECK_INPUT(eid);
+    CHECK_INPUT(nid);
+    CHECK_INPUT(A);
+    CHECK_INPUT(B);
     return maskedmm_csr_cuda_forward(ptr, eid, nid, A, B);
 }
 
@@ -42,7 +53,9 @@ at::Tensor sparse_softmax_forward(
     at::Tensor ptr,
     at::Tensor eid,
     at::Tensor x) {
-    // TODO: type check
+    CHECK_INPUT(ptr);
+    CHECK_INPUT(eid);
+    CHECK_INPUT(x);
     return sparse_softmax_cuda_forward(ptr, eid, x);
 }
 
@@ -59,7 +72,11 @@ at::Tensor vector_spmm_forward(
     at::Tensor nid,
     at::Tensor edata,
     at::Tensor x) {
-    // TODO: type check
+    CHECK_INPUT(ptr);
+    CHECK_INPUT(eid);
+    CHECK_INPUT(nid);
+    CHECK_INPUT(edata);
+    CHECK_INPUT(x);
     return vector_spmm_cuda_forward(ptr, eid, nid, edata, x);
 }
 
@@ -76,7 +93,11 @@ std::vector<at::Tensor> maskedmm_backward(
     at::Tensor A,
     at::Tensor B,
     at::Tensor dy) {
-    // TODO: check type
+    CHECK_INPUT(row);
+    CHECK_INPUT(col);
+    CHECK_INPUT(A);
+    CHECK_INPUT(B);
+    CHECK_INPUT(dy);
     return maskedmm_cuda_backward(row, col, A, B, dy);
 }
 
@@ -101,7 +122,14 @@ std::vector<at::Tensor> maskedmm_csr_backward(
     at::Tensor A,
     at::Tensor B,
     at::Tensor dy) {
-    // TODO: type check
+    CHECK_INPUT(ptr_r);
+    CHECK_INPUT(eid_r);
+    CHECK_INPUT(nid_r);
+    CHECK_INPUT(ptr_c);
+    CHECK_INPUT(eid_c);
+    CHECK_INPUT(nid_c);
+    CHECK_INPUT(A);
+    CHECK_INPUT(B);
     return maskedmm_csr_cuda_backward(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B, dy);
 }
 
@@ -116,7 +144,10 @@ at::Tensor sparse_softmax_backward(
     at::Tensor eid,
     at::Tensor y,
     at::Tensor dy) {
-    // TODO: type check
+    CHECK_INPUT(ptr);
+    CHECK_INPUT(eid);
+    CHECK_INPUT(y);
+    CHECK_INPUT(dy);
     return sparse_softmax_cuda_backward(ptr, eid, y, dy);
 }
 
@@ -141,7 +172,15 @@ std::vector<at::Tensor> vector_spmm_backward(
     at::Tensor edata,
     at::Tensor dy,
     at::Tensor x) {
-    // TODO: type check
+    CHECK_INPUT(ptr);
+    CHECK_INPUT(eid);
+    CHECK_INPUT(nid);
+    CHECK_INPUT(ptr_t);
+    CHECK_INPUT(eid_t);
+    CHECK_INPUT(nid_t);
+    CHECK_INPUT(edata);
+    CHECK_INPUT(dy);
+    CHECK_INPUT(x);
     return vector_spmm_cuda_backward(ptr, eid, nid, ptr_t, eid_t, nid_t, edata, dy, x);
 }
 

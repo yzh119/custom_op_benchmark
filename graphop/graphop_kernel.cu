@@ -9,6 +9,8 @@
 #include <vector>
 #include <ATen/Type.h>
 #include <c10/util/Exception.h>
+#include <iostream>
+#include <cstdio>
 
 #define AT_CASE_ITYPE(enum_type, type, DTYPE, NAME, ...)                    \
   case enum_type: {                                                         \
@@ -268,7 +270,6 @@ std::vector<at::Tensor> maskedmm_cuda_backward(
 
     auto dA = at::zeros_like(A, A.options());
     auto dB = at::zeros_like(B, B.options());
-    dy = dy.contiguous();
 
     AT_DISPATCH_IDX_DATA_TYPES(row.type(), A.type(), "maskedmm_cuda_backward", ([&] {
         maskedmm_backward_kernel<idx_t, data_t><<<blocks, threads>>>(
@@ -291,9 +292,10 @@ at::Tensor maskedmm_csr_cuda_forward(
     at::Tensor nid,
     at::Tensor A,
     at::Tensor B) {
-    // ptr: (n + 1); eid, nid: (e); A, B: (n, d) or (n, h, d); y: (e)
+    // ptr: (n + 1); eid, nid: (e); A, B: (n, d) or (n, h, d); 
     const auto e = eid.size(0);
     const auto n = A.size(0);
+    assert(n == ptr.size(0) - 1);
     const auto d = A.size(-1);
     const auto h = (A.dim() == 2) ? 1: A.size(1);
     auto y = (h == 1) ? at::zeros({e}, A.options()): at::zeros({e, h}, A.options());
@@ -312,6 +314,15 @@ at::Tensor maskedmm_csr_cuda_forward(
             y.data<data_t>(),
             d, n, h);
     }));
+
+/*
+    cudaError err = cudaDeviceSynchronize();
+    if( cudaSuccess != err )
+    {
+        printf("cudaCheckError() with sync failed at: %s\n", cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+*/
     return y;
 }
 
@@ -338,7 +349,6 @@ std::vector<at::Tensor> maskedmm_csr_cuda_backward(
 
     auto dA = at::zeros_like(A, A.options());
     auto dB = at::zeros_like(B, B.options());
-    dy = dy.contiguous();
 
     AT_DISPATCH_IDX_DATA_TYPES(ptr_r.type(), A.type(), "maskedmm_csr_cuda_backward", ([&] {
         maskedmm_csr_backward_kernel<idx_t, data_t><<<blocks, threads>>>(
@@ -379,6 +389,7 @@ at::Tensor sparse_softmax_cuda_forward(
             y.data<data_t>(),
             n, h);
     }));
+
     return y;
 }
 
@@ -393,8 +404,6 @@ at::Tensor sparse_softmax_cuda_backward(
     assert(h <= 32);
     const dim3 threads(1, 32, h);
     const dim3 blocks((n + threads.x - 1) / threads.x);
-    
-    dy = dy.contiguous(); 
     
     const auto dx = at::zeros_like(dy, dy.options());
 
@@ -436,6 +445,7 @@ at::Tensor vector_spmm_cuda_forward(
             y.data<data_t>(),
             d, n, h);
     }));
+
     return y;
 }
 
@@ -457,7 +467,6 @@ std::vector<at::Tensor> vector_spmm_cuda_backward(
     int threads = 32;
     const dim3 blocks(n);
     
-    dy = dy.contiguous(); 
     const auto xt = (h == 1) ? x.transpose(0, 1).contiguous(): x.permute({1, 2, 0}).contiguous();
 
     const auto dx = at::zeros_like(x, x.options());

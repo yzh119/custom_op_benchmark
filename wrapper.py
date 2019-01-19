@@ -470,4 +470,3 @@ if __name__ == '__main__':
     y.backward(th.cat([_.view(n, 1, dim) for _ in grad], dim=-2))
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(A_grad_ori, A.grad) and th.allclose(val.grad, adj_grad_ori)

@@ -1,6 +1,7 @@
 import torch as th
 from graphop import *
 from torch.autograd import Function
+import os
 
 class SparseSoftmax(Function):
     @staticmethod
@@ -72,8 +73,7 @@ class MaskedMMSimple(Function):
         dB = th.sparse.mm(inc_y.t().float(), dBe)
         return None, None, dA, dB
 
-if __name__ == '__main__':
-    import os
+def main():
     batch_size = 512
     l = 30
     n = batch_size * l
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         ptr_r = th.zeros(n + 1, dtype=th.long)
         ptr_c = th.zeros(n + 1, dtype=th.long)
         nid_r = th.zeros(e, dtype=th.long)
-        nid_c = th.zeros(e, dtype=th.long)    
+        nid_c = th.zeros(e, dtype=th.long)
         cnt = 0
         for b in range(batch_size):
             for x in range(b * l, (b + 1) * l):
@@ -124,9 +124,9 @@ if __name__ == '__main__':
         for b in range(batch_size):
             for x in range(b * l, (b + 1) * l):
                 for y in range(b * l, (b + 1) * l):
-                    i_x[0, cnt] = cnt 
+                    i_x[0, cnt] = cnt
                     i_x[1, cnt] = x
-                    i_y[0, cnt] = cnt 
+                    i_y[0, cnt] = cnt
                     i_y[1, cnt] = y
                     cnt += 1
         th.save((i_x, i_y), 'ixy.pt')
@@ -134,7 +134,7 @@ if __name__ == '__main__':
         i_x, i_y = th.load('ixy.pt')
 
     inc_x = th.sparse.ByteTensor(i_x, v, th.Size([e, n]))
-    inc_y = th.sparse.ByteTensor(i_y, v, th.Size([e, n])) 
+    inc_y = th.sparse.ByteTensor(i_y, v, th.Size([e, n]))
 
     import time
     inc_x = inc_x.cuda()
@@ -145,9 +145,9 @@ if __name__ == '__main__':
     print('Single Head (batch size: 512, length: 30, dim: 1024)\n===========================================')
     print('MaskedNN(src_dot_dst)\nsimple implementation(copy to edge)')
     dim = 1024
-    A = th.rand(n, dim, requires_grad=True, device='cuda:0')
-    B = th.rand(n, dim, requires_grad=True, device='cuda:0')
-    grad = th.rand(e, device='cuda:0')
+    A = th.rand(n, dim, requires_grad=True, device='cuda')
+    B = th.rand(n, dim, requires_grad=True, device='cuda')
+    grad = th.rand(e, device='cuda')
     tic = time.time()
     A_e = th.sparse.mm(inc_x.float(), A)
     B_e = th.sparse.mm(inc_y.float(), B)
@@ -223,25 +223,25 @@ if __name__ == '__main__':
     print('------------------------------------')
     print('vanilla softmax(scatter)')
     tic = time.time()
-    x = th.rand(e, requires_grad=True, device='cuda:0')
+    x = th.rand(e, requires_grad=True, device='cuda')
     y = th.softmax(x.view(batch_size, l, l), -1).view(-1)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     tic = time.time()
-    y_ori = y.clone() 
+    y_ori = y.clone()
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
     x_grad_ori = x.grad.clone()
     x.grad.zero_()
-    
+
     print('custom softmax(scatter)')
     tic = time.time()
     y = SparseSoftmax.apply(ptr_r, eid_r, x)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(y_ori, y) 
-    tic = time.time() 
+    assert th.allclose(y_ori, y)
+    tic = time.time()
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
@@ -250,25 +250,25 @@ if __name__ == '__main__':
 
     print('vanilla softmax(gather)')
     tic = time.time()
-    x = th.rand(e, requires_grad=True, device='cuda:0')
+    x = th.rand(e, requires_grad=True, device='cuda')
     y = th.softmax(x.view(batch_size, l, l), -2).view(-1)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     tic = time.time()
-    y_ori = y.clone() 
+    y_ori = y.clone()
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
     x_grad_ori = x.grad.clone()
     x.grad.zero_()
-    
+
     print('custom softmax(gather)')
     tic = time.time()
     y = SparseSoftmax.apply(ptr_c, eid_c, x)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(y_ori, y) 
-    tic = time.time() 
+    assert th.allclose(y_ori, y)
+    tic = time.time()
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
@@ -278,7 +278,7 @@ if __name__ == '__main__':
     print('------------------------------------')
     print("spmm(pytorch coalesce)")
     A.grad.zero_()
-    grad = th.rand(n, dim, device='cuda:0')
+    grad = th.rand(n, dim, device='cuda')
     tic = time.time()
     y = th.sparse.mm(adj_1, A)
     th.cuda.synchronize()
@@ -299,7 +299,7 @@ if __name__ == '__main__':
     val.requires_grad_(True)
     y = VectorSPMM.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, val, A)
     th.cuda.synchronize()
-    print('forward elapse time: {}'.format(time.time() - tic)) 
+    print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y_ori, y)
     tic = time.time()
     y.backward(grad)
@@ -314,9 +314,9 @@ if __name__ == '__main__':
     print('MaskedNN(src_dot_dst)\nsimple implementation(copy to edge)')
     dim = 64
     h = 8
-    A = th.rand(n, dim * h, requires_grad=True, device='cuda:0')
-    B = th.rand(n, dim * h, requires_grad=True, device='cuda:0')
-    grad = th.rand(e, h, device='cuda:0')
+    A = th.rand(n, dim * h, requires_grad=True, device='cuda')
+    B = th.rand(n, dim * h, requires_grad=True, device='cuda')
+    grad = th.rand(e, h, device='cuda')
     tic = time.time()
     A_e = th.sparse.mm(inc_x.float(), A)
     B_e = th.sparse.mm(inc_y.float(), B)
@@ -378,25 +378,25 @@ if __name__ == '__main__':
     print('------------------------------------')
     print('vanilla softmax(scatter)')
     tic = time.time()
-    x = th.rand(e, h, requires_grad=True, device='cuda:0')
+    x = th.rand(e, h, requires_grad=True, device='cuda')
     y = th.softmax(x.view(batch_size, l, l, h), -2).view(-1, h)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     tic = time.time()
-    y_ori = y.clone() 
+    y_ori = y.clone()
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
     x_grad_ori = x.grad.clone()
     x.grad.zero_()
-    
+
     print('custom softmax(scatter)')
     tic = time.time()
     y = SparseSoftmax.apply(ptr_r, eid_r, x)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(y_ori, y) 
-    tic = time.time() 
+    assert th.allclose(y_ori, y)
+    tic = time.time()
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
@@ -405,25 +405,25 @@ if __name__ == '__main__':
 
     print('vanilla softmax(gather)')
     tic = time.time()
-    x = th.rand(e, h, requires_grad=True, device='cuda:0')
+    x = th.rand(e, h, requires_grad=True, device='cuda')
     y = th.softmax(x.view(batch_size, l, l, h), -3).view(-1, h)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     tic = time.time()
-    y_ori = y.clone() 
+    y_ori = y.clone()
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
     x_grad_ori = x.grad.clone()
     x.grad.zero_()
-    
+
     print('custom softmax(gather)')
     tic = time.time()
     y = SparseSoftmax.apply(ptr_c, eid_c, x)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(y_ori, y) 
-    tic = time.time() 
+    assert th.allclose(y_ori, y)
+    tic = time.time()
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
@@ -439,7 +439,7 @@ if __name__ == '__main__':
     print('------------------------------------')
     print("spmm(pytorch coalesce)")
     A.grad.zero_()
-    grad = [th.rand(n, dim, device='cuda:0') for _ in range(8)]
+    grad = [th.rand(n, dim, device='cuda') for _ in range(8)]
     tic = time.time()
     ys = []
     for index in range(8):
@@ -464,9 +464,15 @@ if __name__ == '__main__':
     tic = time.time()
     y = VectorSPMM.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, val, A.view(n, h, dim))
     th.cuda.synchronize()
-    print('forward elapse time: {}'.format(time.time() - tic)) 
+    print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y_ori, y)
     tic = time.time()
     y.backward(th.cat([_.view(n, 1, dim) for _ in grad], dim=-2))
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
+
+if __name__ == '__main__':
+    device = th.device('cuda:1')
+    with th.cuda.device(device):
+        main()
+

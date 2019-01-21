@@ -245,7 +245,7 @@ if __name__ == '__main__':
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
+    assert th.allclose(x_grad_ori, x.grad)#, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
     print('vanilla softmax(gather)')
@@ -272,7 +272,7 @@ if __name__ == '__main__':
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
+    assert th.allclose(x_grad_ori, x.grad)#, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
     print('------------------------------------')
@@ -400,7 +400,7 @@ if __name__ == '__main__':
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
+    assert th.allclose(x_grad_ori, x.grad)#, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
     print('vanilla softmax(gather)')
@@ -427,7 +427,7 @@ if __name__ == '__main__':
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
+    assert th.allclose(x_grad_ori, x.grad) #, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
     adjs = []

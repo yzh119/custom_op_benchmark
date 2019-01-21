@@ -183,10 +183,10 @@ __global__ void vector_spmm_backward_kernel_1(idx_t* __restrict__ ptr, idx_t* __
  */
 template <class idx_t, class data_t>
 __global__ void sparse_softmax_forward_kernel(idx_t* __restrict__ ptr, idx_t* __restrict__ eid, data_t* __restrict__ x, data_t* __restrict__ y, int n, int h) {
-    data_t max_val = *x;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = threadIdx.y;
     if (i < n) {
+        data_t max_val = x[eid[ptr[i]] * h + j];
         for (int k = ptr[i]; k < ptr[i + 1]; ++k)
             max_val = max(max_val, x[eid[k] * h + j]);
 

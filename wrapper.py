@@ -114,7 +114,7 @@ if __name__ == '__main__':
         i, eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = th.load('i.pt')
 
     adj = th.sparse.ByteTensor(i, v, th.Size([n, n]))
-    adj_1 = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda().coalesce()
+    adj_1 = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda(0).coalesce()
     adj_1.requires_grad_(True)
 
     if not os.path.exists('ix.pt'):
@@ -137,10 +137,11 @@ if __name__ == '__main__':
     inc_y = th.sparse.ByteTensor(i_y, v, th.Size([e, n])) 
 
     import time
-    inc_x = inc_x.cuda()
-    inc_y = inc_y.cuda()
-    adj = adj.cuda()
-    eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = eid_r.cuda(), eid_c.cuda(), ptr_r.cuda(), ptr_c.cuda(), nid_r.cuda(), nid_c.cuda()
+    inc_x = inc_x.cuda(0)
+    inc_y = inc_y.cuda(0)
+    adj = adj.cuda(0)
+    eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = eid_r.cuda(0), eid_c.cuda(0), ptr_r.cuda(0), ptr_c.cuda(0), nid_r.cuda(0), nid_c.cuda(0)
+    th.cuda.synchronize()
 
     print('Single Head (batch size: 512, length: 30, dim: 1024)\n===========================================')
     print('MaskedNN(src_dot_dst)\nsimple implementation(copy to edge)')
@@ -245,7 +246,7 @@ if __name__ == '__main__':
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(x_grad_ori, x.grad)#, rtol=1e-3, atol=1e-6)
+    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
     print('vanilla softmax(gather)')
@@ -272,7 +273,7 @@ if __name__ == '__main__':
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(x_grad_ori, x.grad)#, rtol=1e-3, atol=1e-6)
+    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
     print('------------------------------------')
@@ -400,7 +401,7 @@ if __name__ == '__main__':
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(x_grad_ori, x.grad)#, rtol=1e-3, atol=1e-6)
+    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
     print('vanilla softmax(gather)')
@@ -427,12 +428,12 @@ if __name__ == '__main__':
     y.backward(grad)
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(x_grad_ori, x.grad) #, rtol=1e-3, atol=1e-6)
+    assert th.allclose(x_grad_ori, x.grad, rtol=1e-3, atol=1e-6)
     x.grad.zero_()
 
     adjs = []
     for index in range(8):
-        adj_index = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda().coalesce()
+        adj_index = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda(0).coalesce()
         adj_index.requires_grad_(True)
         adjs.append(adj_index)
 

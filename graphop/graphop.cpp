@@ -6,16 +6,16 @@
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
 at::Tensor maskedmm_cuda_forward(
-    at::Tensor row,
-    at::Tensor col,
-    at::Tensor A,
-    at::Tensor B);
+    const at::Tensor& row,
+    const at::Tensor& col,
+    const at::Tensor& A,
+    const at::Tensor& B);
 
 at::Tensor maskedmm_forward(
-    at::Tensor row,
-    at::Tensor col,
-    at::Tensor A,
-    at::Tensor B) {
+    const at::Tensor& row,
+    const at::Tensor& col,
+    const at::Tensor& A,
+    const at::Tensor& B) {
     CHECK_INPUT(row);
     CHECK_INPUT(col);
     CHECK_INPUT(A);
@@ -24,18 +24,18 @@ at::Tensor maskedmm_forward(
 }
 
 at::Tensor maskedmm_csr_cuda_forward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor nid,
-    at::Tensor A,
-    at::Tensor B);
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& nid,
+    const at::Tensor& A,
+    const at::Tensor& B);
 
 at::Tensor maskedmm_csr_forward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor nid,
-    at::Tensor A,
-    at::Tensor B) {
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& nid,
+    const at::Tensor& A,
+    const at::Tensor& B) {
     CHECK_INPUT(ptr);
     CHECK_INPUT(eid);
     CHECK_INPUT(nid);
@@ -45,14 +45,14 @@ at::Tensor maskedmm_csr_forward(
 }
 
 at::Tensor sparse_softmax_cuda_forward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor x);
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& x);
 
 at::Tensor sparse_softmax_forward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor x) {
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& x) {
     CHECK_INPUT(ptr);
     CHECK_INPUT(eid);
     CHECK_INPUT(x);
@@ -60,18 +60,18 @@ at::Tensor sparse_softmax_forward(
 }
 
 at::Tensor vector_spmm_cuda_forward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor nid,
-    at::Tensor edata,
-    at::Tensor x);
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& nid,
+    const at::Tensor& edata,
+    const at::Tensor& x);
 
 at::Tensor vector_spmm_forward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor nid,
-    at::Tensor edata,
-    at::Tensor x) {
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& nid,
+    const at::Tensor& edata,
+    const at::Tensor& x) {
     CHECK_INPUT(ptr);
     CHECK_INPUT(eid);
     CHECK_INPUT(nid);
@@ -81,18 +81,18 @@ at::Tensor vector_spmm_forward(
 }
 
 std::vector<at::Tensor> maskedmm_cuda_backward(
-    at::Tensor row,
-    at::Tensor col,
-    at::Tensor A,
-    at::Tensor B,
-    at::Tensor dy);
+    const at::Tensor& row,
+    const at::Tensor& col,
+    const at::Tensor& A,
+    const at::Tensor& B,
+    const at::Tensor& dy);
 
 std::vector<at::Tensor> maskedmm_backward(
-    at::Tensor row,
-    at::Tensor col,
-    at::Tensor A,
-    at::Tensor B,
-    at::Tensor dy) {
+    const at::Tensor& row,
+    const at::Tensor& col,
+    const at::Tensor& A,
+    const at::Tensor& B,
+    const at::Tensor& dy) {
     CHECK_INPUT(row);
     CHECK_INPUT(col);
     CHECK_INPUT(A);
@@ -102,26 +102,26 @@ std::vector<at::Tensor> maskedmm_backward(
 }
 
 std::vector<at::Tensor> maskedmm_csr_cuda_backward(
-    at::Tensor ptr_r,
-    at::Tensor eid_r,
-    at::Tensor nid_r,
-    at::Tensor ptr_c,
-    at::Tensor eid_c,
-    at::Tensor nid_c,
-    at::Tensor A,
-    at::Tensor B,
-    at::Tensor dy);
+    const at::Tensor& ptr_r,
+    const at::Tensor& eid_r,
+    const at::Tensor& nid_r,
+    const at::Tensor& ptr_c,
+    const at::Tensor& eid_c,
+    const at::Tensor& nid_c,
+    const at::Tensor& A,
+    const at::Tensor& B,
+    const at::Tensor& dy);
 
 std::vector<at::Tensor> maskedmm_csr_backward(
-    at::Tensor ptr_r,
-    at::Tensor eid_r,
-    at::Tensor nid_r,
-    at::Tensor ptr_c,
-    at::Tensor eid_c,
-    at::Tensor nid_c,
-    at::Tensor A,
-    at::Tensor B,
-    at::Tensor dy) {
+    const at::Tensor& ptr_r,
+    const at::Tensor& eid_r,
+    const at::Tensor& nid_r,
+    const at::Tensor& ptr_c,
+    const at::Tensor& eid_c,
+    const at::Tensor& nid_c,
+    const at::Tensor& A,
+    const at::Tensor& B,
+    const at::Tensor& dy) {
     CHECK_INPUT(ptr_r);
     CHECK_INPUT(eid_r);
     CHECK_INPUT(nid_r);
@@ -134,16 +134,16 @@ std::vector<at::Tensor> maskedmm_csr_backward(
 }
 
 at::Tensor sparse_softmax_cuda_backward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor y,
-    at::Tensor dy);
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& y,
+    const at::Tensor& dy);
 
 at::Tensor sparse_softmax_backward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor y,
-    at::Tensor dy) {
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& y,
+    const at::Tensor& dy) {
     CHECK_INPUT(ptr);
     CHECK_INPUT(eid);
     CHECK_INPUT(y);
@@ -152,26 +152,26 @@ at::Tensor sparse_softmax_backward(
 }
 
 std::vector<at::Tensor> vector_spmm_cuda_backward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor nid,
-    at::Tensor ptr_t,
-    at::Tensor eid_t,
-    at::Tensor nid_t,
-    at::Tensor edata,
-    at::Tensor dy,
-    at::Tensor x);
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& nid,
+    const at::Tensor& ptr_t,
+    const at::Tensor& eid_t,
+    const at::Tensor& nid_t,
+    const at::Tensor& edata,
+    const at::Tensor& dy,
+    const at::Tensor& x);
 
 std::vector<at::Tensor> vector_spmm_backward(
-    at::Tensor ptr,
-    at::Tensor eid,
-    at::Tensor nid, 
-    at::Tensor ptr_t,
-    at::Tensor eid_t,
-    at::Tensor nid_t,
-    at::Tensor edata,
-    at::Tensor dy,
-    at::Tensor x) {
+    const at::Tensor& ptr,
+    const at::Tensor& eid,
+    const at::Tensor& nid, 
+    const at::Tensor& ptr_t,
+    const at::Tensor& eid_t,
+    const at::Tensor& nid_t,
+    const at::Tensor& edata,
+    const at::Tensor& dy,
+    const at::Tensor& x) {
     CHECK_INPUT(ptr);
     CHECK_INPUT(eid);
     CHECK_INPUT(nid);

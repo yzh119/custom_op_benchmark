@@ -4,15 +4,15 @@ from torch.autograd import Function
 
 class SparseSoftmax(Function):
     @staticmethod
-    def forward(ctx, ptr, eid, x):
-        y = sparse_softmax_forward(ptr, eid, x)
-        ctx.save_for_backward(ptr, eid, y)
+    def forward(ctx, indptr, eid, x):
+        y = sparse_softmax_forward(indptr, eid, x)
+        ctx.save_for_backward(indptr, eid, y)
         return y
 
     @staticmethod
     def backward(ctx, dy):
-        ptr, eid, y = ctx.saved_tensors
-        return None, None, sparse_softmax_backward(ptr, eid, y, dy)
+        indptr, eid, y = ctx.saved_tensors
+        return None, None, sparse_softmax_backward(indptr, eid, y, dy)
 
 class MaskedMM(Function):
     @staticmethod
@@ -29,27 +29,27 @@ class MaskedMM(Function):
 
 class MaskedMMCSR(Function):
     @staticmethod
-    def forward(ctx, ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B):
-        ctx.save_for_backward(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B)
-        return maskedmm_csr_forward(ptr_r, eid_r, nid_r, A, B)
+    def forward(ctx, indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B):
+        ctx.save_for_backward(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B)
+        return maskedmm_csr_forward(indptr_r, eid_r, indices_r, A, B)
 
     @staticmethod
     def backward(ctx, grad):
-        ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B = ctx.saved_tensors
-        dA, dB = maskedmm_csr_backward(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B, grad)
+        indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B = ctx.saved_tensors
+        dA, dB = maskedmm_csr_backward(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B, grad)
         return None, None, None, None, None, None, dA, dB
 
 class VectorSPMM(Function):
     @staticmethod
-    def forward(ctx, ptr, eid, nid, ptr_t, eid_t, nid_t, edata, x):
-        y = vector_spmm_forward(ptr, eid, nid, edata, x)
-        ctx.save_for_backward(ptr, eid, nid, ptr_t, eid_t, nid_t, edata, x)
+    def forward(ctx, indptr, eid, indices, ptr_t, eid_t, indices_t, edata, x):
+        y = vector_spmm_forward(indptr, eid, indices, edata, x)
+        ctx.save_for_backward(indptr, eid, indices, ptr_t, eid_t, indices_t, edata, x)
         return y
 
     @staticmethod
     def backward(ctx, dy):
-        ptr, eid, nid, ptr_t, eid_t, nid_t, edata, x = ctx.saved_tensors
-        dedata, dx = vector_spmm_backward(ptr, eid, nid, ptr_t, eid_t, nid_t, edata, dy, x)
+        indptr, eid, indices, ptr_t, eid_t, indices_t, edata, x = ctx.saved_tensors
+        dedata, dx = vector_spmm_backward(indptr, eid, indices, ptr_t, eid_t, indices_t, edata, dy, x)
         return None, None, None, None, None, None, dedata, dx
 
 class MaskedMMSimple(Function):
@@ -83,35 +83,35 @@ if __name__ == '__main__':
         i = th.zeros(2, e, dtype=th.long)
         eid_r = th.zeros(e, dtype=th.long)
         eid_c = th.zeros(e, dtype=th.long)
-        ptr_r = th.zeros(n + 1, dtype=th.long)
-        ptr_c = th.zeros(n + 1, dtype=th.long)
-        nid_r = th.zeros(e, dtype=th.long)
-        nid_c = th.zeros(e, dtype=th.long)    
+        indptr_r = th.zeros(n + 1, dtype=th.long)
+        indptr_c = th.zeros(n + 1, dtype=th.long)
+        indices_r = th.zeros(e, dtype=th.long)
+        indices_c = th.zeros(e, dtype=th.long)    
         cnt = 0
         for b in range(batch_size):
             for x in range(b * l, (b + 1) * l):
-                ptr_r[x] = cnt
+                indptr_r[x] = cnt
                 for y in range(b * l, (b + 1) * l):
                     i[0, cnt] = x
                     i[1, cnt] = y
-                    nid_r[cnt] = y
+                    indices_r[cnt] = y
                     eid_r[cnt] = cnt
                     cnt += 1
-        ptr_r[n] = cnt
+        indptr_r[n] = cnt
 
         cnt = 0
         for b in range(batch_size):
             for y in range(b * l, (b + 1) * l):
-                ptr_c[y] = cnt
+                indptr_c[y] = cnt
                 for x in range(b * l, (b + 1) * l):
-                    nid_c[cnt] = x
+                    indices_c[cnt] = x
                     eid_c[cnt] = b * l * l + (x % l) * l + (y % l)
                     cnt += 1
-        ptr_c[n] = cnt
+        indptr_c[n] = cnt
 
-        th.save((i, eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c), 'i.pt')
+        th.save((i, eid_r, eid_c, indptr_r, ptr_c, indices_r, indices_c), 'i.pt')
     else:
-        i, eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = th.load('i.pt')
+        i, eid_r, eid_c, indptr_r, ptr_c, indices_r, indices_c = th.load('i.pt')
 
     adj = th.sparse.ByteTensor(i, v, th.Size([n, n]))
     adj_1 = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda(0).coalesce()
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     inc_x = inc_x.cuda(0)
     inc_y = inc_y.cuda(0)
     adj = adj.cuda(0)
-    eid_r, eid_c, ptr_r, ptr_c, nid_r, nid_c = eid_r.cuda(0), eid_c.cuda(0), ptr_r.cuda(0), ptr_c.cuda(0), nid_r.cuda(0), nid_c.cuda(0)
+    eid_r, eid_c, indptr_r, ptr_c, indices_r, indices_c = eid_r.cuda(0), eid_c.cuda(0), ptr_r.cuda(0), ptr_c.cuda(0), indices_r.cuda(0), indices_c.cuda(0)
     th.cuda.synchronize()
 
     print('Single Head (batch size: 512, length: 30, dim: 1024)\n===========================================')
@@ -208,7 +208,7 @@ if __name__ == '__main__':
 
     print('custom kernel(csr)')
     tic = time.time()
-    y = MaskedMMCSR.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B)
+    y = MaskedMMCSR.apply(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y, y_ori)
@@ -238,7 +238,7 @@ if __name__ == '__main__':
     
     print('custom softmax(scatter)')
     tic = time.time()
-    y = SparseSoftmax.apply(ptr_r, eid_r, x)
+    y = SparseSoftmax.apply(indptr_r, eid_r, x)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y_ori, y) 
@@ -265,7 +265,7 @@ if __name__ == '__main__':
     
     print('custom softmax(gather)')
     tic = time.time()
-    y = SparseSoftmax.apply(ptr_c, eid_c, x)
+    y = SparseSoftmax.apply(indptr_c, eid_c, x)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y_ori, y) 
@@ -298,7 +298,7 @@ if __name__ == '__main__':
     tic = time.time()
     val = adj_1._values()
     val.requires_grad_(True)
-    y = VectorSPMM.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, val, A)
+    y = VectorSPMM.apply(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, val, A)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic)) 
     assert th.allclose(y_ori, y)
@@ -363,7 +363,7 @@ if __name__ == '__main__':
 
     print('custom kernel(csr)')
     tic = time.time()
-    y = MaskedMMCSR.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A.view(-1, h, dim), B.view(-1, h, dim))
+    y = MaskedMMCSR.apply(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A.view(-1, h, dim), B.view(-1, h, dim))
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y, y_ori)
@@ -393,7 +393,7 @@ if __name__ == '__main__':
     
     print('custom softmax(scatter)')
     tic = time.time()
-    y = SparseSoftmax.apply(ptr_r, eid_r, x)
+    y = SparseSoftmax.apply(indptr_r, eid_r, x)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y_ori, y) 
@@ -420,7 +420,7 @@ if __name__ == '__main__':
     
     print('custom softmax(gather)')
     tic = time.time()
-    y = SparseSoftmax.apply(ptr_c, eid_c, x)
+    y = SparseSoftmax.apply(indptr_c, eid_c, x)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y_ori, y) 
@@ -463,7 +463,7 @@ if __name__ == '__main__':
     val = th.cat([_._values().view(-1, 1) for _ in adjs], dim=-1)
     val.requires_grad_(True)
     tic = time.time()
-    y = VectorSPMM.apply(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, val, A.view(n, h, dim))
+    y = VectorSPMM.apply(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, val, A.view(n, h, dim))
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic)) 
     assert th.allclose(y_ori, y)

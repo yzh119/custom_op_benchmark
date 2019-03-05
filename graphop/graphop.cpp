@@ -24,60 +24,60 @@ at::Tensor maskedmm_forward(
 }
 
 at::Tensor maskedmm_csr_cuda_forward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
-    const at::Tensor& nid,
+    const at::Tensor& indices,
     const at::Tensor& A,
     const at::Tensor& B);
 
 at::Tensor maskedmm_csr_forward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
-    const at::Tensor& nid,
+    const at::Tensor& indices,
     const at::Tensor& A,
     const at::Tensor& B) {
-    CHECK_INPUT(ptr);
+    CHECK_INPUT(indptr);
     CHECK_INPUT(eid);
-    CHECK_INPUT(nid);
+    CHECK_INPUT(indices);
     CHECK_INPUT(A);
     CHECK_INPUT(B);
-    return maskedmm_csr_cuda_forward(ptr, eid, nid, A, B);
+    return maskedmm_csr_cuda_forward(indptr, eid, indices, A, B);
 }
 
 at::Tensor sparse_softmax_cuda_forward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& x);
 
 at::Tensor sparse_softmax_forward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& x) {
-    CHECK_INPUT(ptr);
+    CHECK_INPUT(indptr);
     CHECK_INPUT(eid);
     CHECK_INPUT(x);
-    return sparse_softmax_cuda_forward(ptr, eid, x);
+    return sparse_softmax_cuda_forward(indptr, eid, x);
 }
 
 at::Tensor vector_spmm_cuda_forward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
-    const at::Tensor& nid,
+    const at::Tensor& indices,
     const at::Tensor& edata,
     const at::Tensor& x);
 
 at::Tensor vector_spmm_forward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
-    const at::Tensor& nid,
+    const at::Tensor& indices,
     const at::Tensor& edata,
     const at::Tensor& x) {
-    CHECK_INPUT(ptr);
+    CHECK_INPUT(indptr);
     CHECK_INPUT(eid);
-    CHECK_INPUT(nid);
+    CHECK_INPUT(indices);
     CHECK_INPUT(edata);
     CHECK_INPUT(x);
-    return vector_spmm_cuda_forward(ptr, eid, nid, edata, x);
+    return vector_spmm_cuda_forward(indptr, eid, indices, edata, x);
 }
 
 std::vector<at::Tensor> maskedmm_cuda_backward(
@@ -102,86 +102,86 @@ std::vector<at::Tensor> maskedmm_backward(
 }
 
 std::vector<at::Tensor> maskedmm_csr_cuda_backward(
-    const at::Tensor& ptr_r,
+    const at::Tensor& indptr_r,
     const at::Tensor& eid_r,
-    const at::Tensor& nid_r,
-    const at::Tensor& ptr_c,
+    const at::Tensor& indices_r,
+    const at::Tensor& indptr_c,
     const at::Tensor& eid_c,
-    const at::Tensor& nid_c,
+    const at::Tensor& indices_c,
     const at::Tensor& A,
     const at::Tensor& B,
     const at::Tensor& dy);
 
 std::vector<at::Tensor> maskedmm_csr_backward(
-    const at::Tensor& ptr_r,
+    const at::Tensor& indptr_r,
     const at::Tensor& eid_r,
-    const at::Tensor& nid_r,
-    const at::Tensor& ptr_c,
+    const at::Tensor& indices_r,
+    const at::Tensor& indptr_c,
     const at::Tensor& eid_c,
-    const at::Tensor& nid_c,
+    const at::Tensor& indices_c,
     const at::Tensor& A,
     const at::Tensor& B,
     const at::Tensor& dy) {
-    CHECK_INPUT(ptr_r);
+    CHECK_INPUT(indptr_r);
     CHECK_INPUT(eid_r);
-    CHECK_INPUT(nid_r);
-    CHECK_INPUT(ptr_c);
+    CHECK_INPUT(indices_r);
+    CHECK_INPUT(indptr_c);
     CHECK_INPUT(eid_c);
-    CHECK_INPUT(nid_c);
+    CHECK_INPUT(indices_c);
     CHECK_INPUT(A);
     CHECK_INPUT(B);
-    return maskedmm_csr_cuda_backward(ptr_r, eid_r, nid_r, ptr_c, eid_c, nid_c, A, B, dy);
+    return maskedmm_csr_cuda_backward(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B, dy);
 }
 
 at::Tensor sparse_softmax_cuda_backward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& y,
     const at::Tensor& dy);
 
 at::Tensor sparse_softmax_backward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& y,
     const at::Tensor& dy) {
-    CHECK_INPUT(ptr);
+    CHECK_INPUT(indptr);
     CHECK_INPUT(eid);
     CHECK_INPUT(y);
     CHECK_INPUT(dy);
-    return sparse_softmax_cuda_backward(ptr, eid, y, dy);
+    return sparse_softmax_cuda_backward(indptr, eid, y, dy);
 }
 
 std::vector<at::Tensor> vector_spmm_cuda_backward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
-    const at::Tensor& nid,
-    const at::Tensor& ptr_t,
+    const at::Tensor& indices,
+    const at::Tensor& indptr_t,
     const at::Tensor& eid_t,
-    const at::Tensor& nid_t,
+    const at::Tensor& indices_t,
     const at::Tensor& edata,
     const at::Tensor& dy,
     const at::Tensor& x);
 
 std::vector<at::Tensor> vector_spmm_backward(
-    const at::Tensor& ptr,
+    const at::Tensor& indptr,
     const at::Tensor& eid,
-    const at::Tensor& nid, 
-    const at::Tensor& ptr_t,
+    const at::Tensor& indices, 
+    const at::Tensor& indptr_t,
     const at::Tensor& eid_t,
-    const at::Tensor& nid_t,
+    const at::Tensor& indices_t,
     const at::Tensor& edata,
     const at::Tensor& dy,
     const at::Tensor& x) {
-    CHECK_INPUT(ptr);
+    CHECK_INPUT(indptr);
     CHECK_INPUT(eid);
-    CHECK_INPUT(nid);
-    CHECK_INPUT(ptr_t);
+    CHECK_INPUT(indices);
+    CHECK_INPUT(indptr_t);
     CHECK_INPUT(eid_t);
-    CHECK_INPUT(nid_t);
+    CHECK_INPUT(indices_t);
     CHECK_INPUT(edata);
     CHECK_INPUT(dy);
     CHECK_INPUT(x);
-    return vector_spmm_cuda_backward(ptr, eid, nid, ptr_t, eid_t, nid_t, edata, dy, x);
+    return vector_spmm_cuda_backward(indptr, eid, indices, indptr_t, eid_t, indices_t, edata, dy, x);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

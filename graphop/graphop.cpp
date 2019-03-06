@@ -44,6 +44,24 @@ at::Tensor maskedmm_csr_forward(
     return maskedmm_csr_cuda_forward(indptr, eid, indices, A, B);
 }
 
+at::Tensor node_mul_edge_cuda_forward(
+    const at::Tensor& indptr,
+    const at::Tensor& eid,
+    const at::Tensor& A,
+    const at::Tensor& B);
+
+at::Tensor node_mul_edge_forward(
+    const at::Tensor& indptr,
+    const at::Tensor& eid,
+    const at::Tensor& A,
+    const at::Tensor& B) {
+    CHECK_INPUT(indptr);
+    CHECK_INPUT(eid);
+    CHECK_INPUT(A);
+    CHECK_INPUT(B);
+    return node_mul_edge_cuda_forward(indptr, eid, A, B);
+}
+
 at::Tensor sparse_softmax_cuda_forward(
     const at::Tensor& indptr,
     const at::Tensor& eid,
@@ -133,6 +151,26 @@ std::vector<at::Tensor> maskedmm_csr_backward(
     return maskedmm_csr_cuda_backward(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B, dy);
 }
 
+at::Tensor node_mul_edge_cuda_backward(
+    const at::Tensor& indptr,
+    const at::Tensor& eid,
+    const at::Tensor& A,
+    const at::Tensor& B,
+    const at::Tensor& dy);
+
+at::Tensor node_mul_edge_backward(
+    const at::Tensor& indptr,
+    const at::Tensor& eid,
+    const at::Tensor& A,
+    const at::Tensor& B,
+    const at::Tensor& dy) {
+    CHECK_INPUT(indptr);
+    CHECK_INPUT(eid);
+    CHECK_INPUT(A);
+    CHECK_INPUT(B);
+    return node_mul_edge_cuda_backward(indptr, eid, A, B, dy);
+}
+
 at::Tensor sparse_softmax_cuda_backward(
     const at::Tensor& indptr,
     const at::Tensor& eid,
@@ -186,9 +224,11 @@ std::vector<at::Tensor> vector_spmm_backward(
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("maskedmm_forward", &maskedmm_forward, "Masked Matrix Multiplication forward");
-    m.def("maskedmm_csr_forward", &maskedmm_csr_forward, "Masked Matrix Multiplication forward(CSR Format)");
     m.def("maskedmm_backward", &maskedmm_backward, "Masked Matrix Multiplication backward");
+    m.def("maskedmm_csr_forward", &maskedmm_csr_forward, "Masked Matrix Multiplication forward(CSR Format)");
     m.def("maskedmm_csr_backward", &maskedmm_csr_backward, "Masked Matrix Multiplication backward(CSR Format)");
+    m.def("node_mul_edge_forward", &node_mul_edge_forward, "Node Multiply Edge forward");
+    m.def("node_mul_edge_backward", &node_mul_edge_backward, "Node Multiply Edge backward");
     m.def("sparse_softmax_forward", &sparse_softmax_forward, "Sparse softmax forward");
     m.def("sparse_softmax_backward", &sparse_softmax_backward, "Sparse softmax backward");
     m.def("vector_spmm_forward", &vector_spmm_forward, "Vectorized SPMM forward");

@@ -29,15 +29,27 @@ class MaskedMM(Function):
 
 class MaskedMMCSR(Function):
     @staticmethod
-    def forward(ctx, indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B):
-        ctx.save_for_backward(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B)
+    def forward(ctx, indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B):
+        ctx.save_for_backward(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B)
         return maskedmm_csr_forward(indptr_r, eid_r, indices_r, A, B)
 
     @staticmethod
     def backward(ctx, grad):
-        indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B = ctx.saved_tensors
-        dA, dB = maskedmm_csr_backward(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B, grad)
+        indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B = ctx.saved_tensors
+        dA, dB = maskedmm_csr_backward(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B, grad)
         return None, None, None, None, None, None, dA, dB
+
+class NodeMulEdge(Function):
+    @staticmethod
+    def forward(ctx, indptr, eid, A, B):
+        ctx.save_for_backward(indptr, eid, A, B)
+        return node_mul_edge_forward(indptr, eid, A, B)
+
+    @staticmethod
+    def backward(ctx, grad):
+        indptr, eid, A, B = ctx.saved_tensors
+        dA, dB = node_mul_edge_backward(indptr, eid, A, B, grad)
+        return None, None, dA, dB
 
 class VectorSPMM(Function):
     @staticmethod
@@ -109,9 +121,9 @@ if __name__ == '__main__':
                     cnt += 1
         indptr_c[n] = cnt
 
-        th.save((i, eid_r, eid_c, indptr_r, ptr_c, indices_r, indices_c), 'i.pt')
+        th.save((i, eid_r, eid_c, indptr_r, indptr_c, indices_r, indices_c), 'i.pt')
     else:
-        i, eid_r, eid_c, indptr_r, ptr_c, indices_r, indices_c = th.load('i.pt')
+        i, eid_r, eid_c, indptr_r, indptr_c, indices_r, indices_c = th.load('i.pt')
 
     adj = th.sparse.ByteTensor(i, v, th.Size([n, n]))
     adj_1 = th.sparse.FloatTensor(i, th.rand(e), th.Size([n, n])).cuda(0).coalesce()
@@ -140,7 +152,7 @@ if __name__ == '__main__':
     inc_x = inc_x.cuda(0)
     inc_y = inc_y.cuda(0)
     adj = adj.cuda(0)
-    eid_r, eid_c, indptr_r, ptr_c, indices_r, indices_c = eid_r.cuda(0), eid_c.cuda(0), ptr_r.cuda(0), ptr_c.cuda(0), indices_r.cuda(0), indices_c.cuda(0)
+    eid_r, eid_c, indptr_r, indptr_c, indices_r, indices_c = eid_r.cuda(0), eid_c.cuda(0), indptr_r.cuda(0), indptr_c.cuda(0), indices_r.cuda(0), indices_c.cuda(0)
     th.cuda.synchronize()
 
     print('Single Head (batch size: 512, length: 30, dim: 1024)\n===========================================')
@@ -208,7 +220,7 @@ if __name__ == '__main__':
 
     print('custom kernel(csr)')
     tic = time.time()
-    y = MaskedMMCSR.apply(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A, B)
+    y = MaskedMMCSR.apply(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y, y_ori)
@@ -298,7 +310,7 @@ if __name__ == '__main__':
     tic = time.time()
     val = adj_1._values()
     val.requires_grad_(True)
-    y = VectorSPMM.apply(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, val, A)
+    y = VectorSPMM.apply(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, val, A)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic)) 
     assert th.allclose(y_ori, y)
@@ -363,7 +375,7 @@ if __name__ == '__main__':
 
     print('custom kernel(csr)')
     tic = time.time()
-    y = MaskedMMCSR.apply(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, A.view(-1, h, dim), B.view(-1, h, dim))
+    y = MaskedMMCSR.apply(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A.view(-1, h, dim), B.view(-1, h, dim))
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y, y_ori)
@@ -463,7 +475,7 @@ if __name__ == '__main__':
     val = th.cat([_._values().view(-1, 1) for _ in adjs], dim=-1)
     val.requires_grad_(True)
     tic = time.time()
-    y = VectorSPMM.apply(indptr_r, eid_r, indices_r, ptr_c, eid_c, indices_c, val, A.view(n, h, dim))
+    y = VectorSPMM.apply(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, val, A.view(n, h, dim))
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic)) 
     assert th.allclose(y_ori, y)

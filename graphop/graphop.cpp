@@ -151,14 +151,14 @@ std::vector<at::Tensor> maskedmm_csr_backward(
     return maskedmm_csr_cuda_backward(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B, dy);
 }
 
-at::Tensor node_mul_edge_cuda_backward(
+std::vector<at::Tensor> node_mul_edge_cuda_backward(
     const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& A,
     const at::Tensor& B,
     const at::Tensor& dy);
 
-at::Tensor node_mul_edge_backward(
+std::vector<at::Tensor> node_mul_edge_backward(
     const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& A,

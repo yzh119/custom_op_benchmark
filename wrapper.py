@@ -319,11 +319,47 @@ if __name__ == '__main__':
     th.cuda.synchronize()
     print('backward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(A_grad_ori, A.grad) and th.allclose(val.grad, adj_grad_ori)
+    A.grad.zero_()
+    val.grad.zero_()
 
     """
     Multi Head Test
     """
     print('\nMulti Head (batch size: 512, length: 30, head: 8, dim:64)\n===========================================')
+    print('NodeMulEdge\nsimple implementation(copy to edge)')
+    dim = 64
+    h = 8
+    A = th.rand(n, dim * h, requires_grad=True, device='cuda:0')
+    B = th.rand(e, dim, requires_grad=True, device='cuda:0')
+    grad = th.rand(e, h, device='cuda:0')
+    tic = time.time()
+    A_e = th.sparse.mm(inc_x.float(), A)
+    y = (A_e.view(-1, h, dim) * B.view(-1, 1, dim)).sum(-1)
+    y_ori = y.clone()
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    tic = time.time()
+    y.backward(grad)
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    A_grad_ori, B_grad_ori = A.grad.clone(), B.grad.clone()
+    A.grad.zero_()
+    B.grad.zero_()
+    
+    print('custom kernel')
+    tic = time.time()
+    y = NodeMulEdge.apply(indptr_r, eid_r, A.view(-1, h, dim), B.view(-1, dim))
+    th.cuda.synchronize()
+    print('forward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(y_ori, y)
+    tic = time.time()
+    y.backward(grad)
+    th.cuda.synchronize()
+    print('backward elapse time: {}'.format(time.time() - tic))
+    assert th.allclose(A_grad_ori, A.grad) and th.allclose(B_grad_ori, B.grad)
+    A.grad.zero_()
+    B.grad.zero_()
+
     print('MaskedNN(src_dot_dst)\nsimple implementation(copy to edge)')
     dim = 64
     h = 8

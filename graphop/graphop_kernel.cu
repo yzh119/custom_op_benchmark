@@ -100,7 +100,7 @@ __global__ void node_mul_edge_forward_kernel(const idx_t* __restrict__ indptr, c
             for (int ko = 0; ko < h; ++ko) {
                 data_t sum = 0;
                 for (int ki = 0; ki < d; ++ki) {
-                    sum += A[(i * h + ko) * d + ki] * B[(eid[j] * h + ko) * d + ki];
+                    sum += A[(i * h + ko) * d + ki] * B[eid[j] * d + ki];
                 }
                 y[eid[j] * h + ko] = sum;
             }
@@ -132,17 +132,36 @@ __global__ void maskedmm_csr_forward_kernel(const idx_t* __restrict__ indptr, co
  * CUDA Kernel of the backward function for Node-Edge Multiplication(reduced on edge, designed for relative positional encoding).
  */
 template <typename idx_t, typename data_t>
-__global__ void node_mul_edge_backward_kernel(const idx_t* __restrict__ indptr, const idx_t* __restrict__ eid, const data_t* __restrict__ A, const data_t* __restrict__ B, const data_t* __restrict__ dy, data_t* __restrict__ dA, data_t* __restrict__ dB, const int d, const int n, const int h) {
+__global__ void node_mul_edge_backward_kernel_0(const idx_t* __restrict__ indptr, const idx_t* __restrict__ eid, const data_t* __restrict__ B, const data_t* __restrict__ dy, data_t* __restrict__ dA, const int d, const int n, const int h) {
     int tx = threadIdx.x;
     int i = blockIdx.x;
     if (i < n) {
         for (int j = tx; j < d * h; j += blockDim.x) {
             data_t sum = 0;
-            for (int k = indptr[i]; k < indptr[i + 1]; ++k) {
-                sum += dy[eid[k] * h + j / d] * B[eid[k] * d * h + j];
-                dB[eid[k] * d * h + j] = dy[eid[k] * h + j / d] * A[i * d * h + j];
-            }
+            for (int k = indptr[i]; k < indptr[i + 1]; ++k)
+                sum += dy[eid[k] * h + j / d] * B[eid[k] * d + j % d];
             dA[i * d * h + j] = sum; 
+        }
+    }
+}
+
+
+/*
+ * CUDA Kernel of the backward function for Node-Edge Multiplication(reduced on edge, designed for relative positional encoding).
+ */
+template <typename idx_t, typename data_t>
+__global__ void node_mul_edge_backward_kernel_1(const idx_t* __restrict__ indptr, const idx_t* __restrict__ eid, const data_t* __restrict__ A, const data_t* __restrict__ dy, data_t* __restrict__ dB, const int d, const int n, const int h) {
+    int tx = threadIdx.x;
+    int i = blockIdx.x;
+    if (i < n) {
+        for (int j = tx; j < d; j += blockDim.x) {
+            for (int k = indptr[i]; k < indptr[i + 1]; ++k) {
+                data_t sum = 0;
+                for (int ki = 0; ki < h; ++ki) {
+                    sum += dy[eid[k] * h + ki] * A[(i * h + ki) * d + j];
+                }
+                dB[eid[k] * d + j] = sum;
+            }
         }
     }
 }
@@ -340,7 +359,7 @@ at::Tensor node_mul_edge_cuda_forward(
     const at::Tensor& eid,
     const at::Tensor& A,
     const at::Tensor& B) {
-    // indptr: (n + 1); eid: (e); A: (n, d) or (n, h, d); B: (e) or (e, d);
+    // indptr: (n + 1); eid: (e); A: (n, d) or (n, h, d); B: (e, d);
     const auto e = eid.size(0);
     const auto n = A.size(0);
     assert(n == indptr.size(0) - 1);
@@ -405,27 +424,35 @@ std::vector<at::Tensor> node_mul_edge_cuda_backward(
     const at::Tensor& A,
     const at::Tensor& B,
     const at::Tensor& dy) {
-    // indptr: (n + 1); eid: (e); dy: (e) or (e, h); A: (n, d) or (n, h, d); B: (e, d) or (e, h, d)
+    // indptr: (n + 1); eid: (e); dy: (e) or (e, h); A: (n, d) or (n, h, d); B: (e, d)
     const auto e = eid.size(0);
     const auto n = A.size(0);
     const auto d = A.size(-1);
     const auto h = (dy.dim() == 2) ? dy.size(1): 1;
 
-    const int threads = 128;
+    int threads = 128;
     const dim3 blocks(n);
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
     auto dA = at::zeros_like(A, A.options());
     auto dB = at::zeros_like(B, B.options());
 
-    AT_DISPATCH_IDX_DATA_TYPES(indptr.type(), A.type(), "node_mul_edge_cuda_backward", ([&] {
-        node_mul_edge_backward_kernel<idx_t, data_t><<<blocks, threads, 0, stream>>>(
+    AT_DISPATCH_IDX_DATA_TYPES(indptr.type(), A.type(), "node_mul_edge_cuda_backward_0", ([&] {
+        node_mul_edge_backward_kernel_0<idx_t, data_t><<<blocks, threads, 0, stream>>>(
             indptr.data<idx_t>(),
             eid.data<idx_t>(),
-            A.data<data_t>(),
             B.data<data_t>(),
             dy.data<data_t>(),
             dA.data<data_t>(),
+            d, n, h);
+    }));
+    threads = d;
+    AT_DISPATCH_IDX_DATA_TYPES(indptr.type(), A.type(), "node_mul_edge_cuda_backward_1", ([&] {
+        node_mul_edge_backward_kernel_1<idx_t, data_t><<<blocks, threads, 0, stream>>>(
+            indptr.data<idx_t>(),
+            eid.data<idx_t>(),
+            A.data<data_t>(),
+            dy.data<data_t>(),
             dB.data<data_t>(),
             d, n, h);
     }));

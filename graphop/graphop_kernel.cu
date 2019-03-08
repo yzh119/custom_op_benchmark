@@ -296,6 +296,8 @@ at::Tensor maskedmm_cuda_forward(
     const at::Tensor& A,
     const at::Tensor& B) {
     // row, col: (e); A, B: (n, d) or (n, h, d); y: (e, h)
+    cudaSetDevice(row.get_device());
+
     const auto e = row.size(0);
     const auto n = A.size(0);
     const auto d = A.size(-1);
@@ -327,6 +329,8 @@ std::vector<at::Tensor> maskedmm_cuda_backward(
     const at::Tensor& B,
     const at::Tensor& dy) {
     // row, col: (e); dy: (e) or (e, h); A, B: (n, d) or (n, h, d);
+    cudaSetDevice(row.get_device());
+
     const auto e = row.size(0);
     const auto n = A.size(0);
     const auto d = A.size(-1);
@@ -360,6 +364,8 @@ at::Tensor node_mul_edge_cuda_forward(
     const at::Tensor& A,
     const at::Tensor& B) {
     // indptr: (n + 1); eid: (e); A: (n, d) or (n, h, d); B: (e, d);
+    cudaSetDevice(indptr.get_device());
+
     const auto e = eid.size(0);
     const auto n = A.size(0);
     assert(n == indptr.size(0) - 1);
@@ -392,6 +398,8 @@ at::Tensor maskedmm_csr_cuda_forward(
     const at::Tensor& A,
     const at::Tensor& B) {
     // indptr: (n + 1); eid, indices: (e); A, B: (n, d) or (n, h, d); 
+    cudaSetDevice(indptr.get_device());
+
     const auto e = eid.size(0);
     const auto n = A.size(0);
     assert(n == indptr.size(0) - 1);
@@ -425,6 +433,8 @@ std::vector<at::Tensor> node_mul_edge_cuda_backward(
     const at::Tensor& B,
     const at::Tensor& dy) {
     // indptr: (n + 1); eid: (e); dy: (e) or (e, h); A: (n, d) or (n, h, d); B: (e, d)
+    cudaSetDevice(indptr.get_device());
+
     const auto e = eid.size(0);
     const auto n = A.size(0);
     const auto d = A.size(-1);
@@ -473,6 +483,8 @@ std::vector<at::Tensor> maskedmm_csr_cuda_backward(
     const at::Tensor& B,
     const at::Tensor& dy) {
     // indptr_r, indptr_c: (n + 1); eid_r, eid_c, indices_r, indices_c: (e); dy: (e) or (e, h); A, B: (n, d) or (n, h, d)
+    cudaSetDevice(indptr_r.get_device());
+
     const auto e = eid_r.size(0);
     const auto n = A.size(0);
     const auto d = A.size(-1);
@@ -508,6 +520,8 @@ at::Tensor sparse_softmax_cuda_forward(
     const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& x) {
+    cudaSetDevice(indptr.get_device());
+
     // indptr: (n + 1); eid: (e); x: (e) or (e, h);
     const auto n = indptr.size(0) - 1;
     const auto h = (x.dim() == 2) ? x.size(1): 1;
@@ -535,6 +549,8 @@ at::Tensor sparse_softmax_cuda_backward(
     const at::Tensor& eid,
     const at::Tensor& y,
     const at::Tensor& dy) {
+    cudaSetDevice(indptr.get_device());
+
     // indptr: (n + 1); eid: (e); y: (e) or (e, h); dy: (e) or (e, h);
     const auto n = indptr.size(0) - 1;
     const auto h = (dy.dim() == 2) ? dy.size(1): 1;
@@ -565,6 +581,8 @@ at::Tensor vector_spmm_cuda_forward(
     const at::Tensor& edata,
     const at::Tensor& x) {
     // indptr: (n + 1); eid, indices: (e); edata: (e) or (e, h); x: (n, d) or (n, h, d);
+    cudaSetDevice(indptr.get_device());
+
     const auto n = indptr.size(0) - 1;
     const auto h = (edata.dim() == 2) ? edata.size(1): 1;
     const auto d = x.size(-1); 
@@ -600,6 +618,8 @@ std::vector<at::Tensor> vector_spmm_cuda_backward(
     const at::Tensor& dy,
     const at::Tensor& x) {
     // indptr: (n + 1); eid, indices: (e); edata: (e) or (e, h); dy, x: (n, d) or (n, h, d); 
+    cudaSetDevice(indptr.get_device());
+
     const auto n = indptr.size(0) - 1;
     const auto h = (edata.dim() == 2) ? edata.size(1): 1;
     const auto d = x.size(-1);

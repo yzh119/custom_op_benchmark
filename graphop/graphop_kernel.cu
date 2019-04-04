@@ -21,6 +21,10 @@
     const at::Type& dtype = DTYPE;                                          \
     using idx_t = type;                                                     \
     switch (dtype.scalarType()) {                                           \
+      case at::ScalarType::Half: {                                          \
+        using data_t = at::Half;                                            \
+        return __VA_ARGS__();                                               \
+      }                                                                     \
       case at::ScalarType::Float: {                                         \
         using data_t = float;                                               \
         return __VA_ARGS__();                                               \
@@ -251,7 +255,7 @@ __global__ void sparse_softmax_forward_kernel(const idx_t* __restrict__ indptr, 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = threadIdx.y;
     if (i < n) {
-        data_t max_val = (indptr[i] < indptr[i + 1]) ? x[eid[indptr[i]] * h + j]: 0;
+        data_t max_val = (indptr[i] < indptr[i + 1]) ? x[eid[indptr[i]] * h + j]: (data_t)(0);
         for (int k = indptr[i]; k < indptr[i + 1]; ++k)
             max_val = max(max_val, x[eid[k] * h + j]);
 

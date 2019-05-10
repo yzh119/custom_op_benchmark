@@ -1,8 +1,3 @@
-/* TODOs
- * - segment_reduce_forward, segment_reduce_backward;
- * - switch backend from aten to dlpack
- */
-
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/Type.h>
@@ -75,7 +70,7 @@ __global__ void node_mul_edge_forward_kernel(const idx_t* __restrict__ indptr, c
  * CUDA Kernel of the forward function for Masked Matrix Multiplication. (argument: csr format)
  */
 template <typename idx_t, typename data_t>
-__global__ void maskedmm_csr_forward_kernel(const idx_t* __restrict__ indptr, const idx_t* __restrict__ eid, const idx_t* __restrict__ indices, const data_t* __restrict__ A, const data_t* __restrict__ B, data_t* __restrict__ y, const int d, const int n, const int h) {
+__global__ void maskedmm_csr_forward_kernel(const idx_t* __restrict__ row, const idx_t* __restrict__ indptr, const idx_t* __restrict__ eid, const idx_t* __restrict__ indices, const data_t* __restrict__ A, const data_t* __restrict__ B, data_t* __restrict__ y, const int d, const int n, const int h) {
     int i = blockIdx.x; 
     int tx = threadIdx.x;
     if (i < n) {
@@ -83,7 +78,7 @@ __global__ void maskedmm_csr_forward_kernel(const idx_t* __restrict__ indptr, co
             for (int ko = 0; ko < h; ++ko) {
                 data_t sum = 0;
                 for (int ki = 0; ki < d; ++ki) {
-                    sum += A[(i * h + ko) * d + ki] * B[(ko * d + ki) * n + indices[j]];
+                    sum += A[(row[i] * h + ko) * d + ki] * B[(ko * d + ki) * n + indices[j]];
                 }
                 y[eid[j] * h + ko] = sum;
             }
@@ -134,7 +129,7 @@ __global__ void node_mul_edge_backward_kernel_1(const idx_t* __restrict__ indptr
  * CUDA Kernel of the backward function for Masked Matrix Multiplication. (argument: csr format)
  */
 template <typename idx_t, typename data_t>
-__global__ void maskedmm_csr_backward_kernel(const idx_t* __restrict__ indptr_r, const idx_t* __restrict__ eid_r, const idx_t* __restrict__ indices_r, const idx_t* __restrict__ indptr_c, const idx_t* __restrict__ eid_c, const idx_t* __restrict__ indices_c, const data_t* __restrict__ A, const data_t* __restrict__ B, const data_t* __restrict__ dy, data_t* __restrict__ dA, data_t* __restrict__ dB, const int d, const int n, const int h) {
+__global__ void maskedmm_csr_backward_kernel(const idx_t* __restrict__ row, const idx_t* __restrict__ indptr, const idx_t* __restrict__ eid, const idx_t* __restrict__ indices, const data_t* __restrict__ B, const data_t* __restrict__ dy, data_t* __restrict__ dA, const int d, const int n, const int h) {
     int tx = threadIdx.x;
     int i = blockIdx.x;
     if (i < n) {
@@ -142,12 +137,7 @@ __global__ void maskedmm_csr_backward_kernel(const idx_t* __restrict__ indptr_r,
             data_t sum = 0;
             for (int k = indptr_r[i]; k < indptr_r[i + 1]; ++k)
                 sum += dy[eid_r[k] * h + j / d] * B[indices_r[k] * d * h + j];
-            dA[i * d * h + j] = sum;
-
-            sum = 0;
-            for (int k = indptr_c[i]; k < indptr_c[i + 1]; ++k)
-                sum += dy[eid_c[k] * h + j / d] * A[indices_c[k] * d * h + j];
-            dB[i * d * h + j] = sum;
+            atomicAdd(dA + row[i] * d * h + j, sum);
         }
     }
 }
@@ -295,6 +285,7 @@ at::Tensor node_mul_edge_cuda_forward(
 
 // __global__ void maskedmm_csr_forward_kernel(idx_t* __restrict__ indptr, idx_t* __restrict__ eid, idx_t* __restrict__ indices, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ y, int d, int n) {
 at::Tensor maskedmm_csr_cuda_forward(
+    const at::Tensor& row,
     const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& indices,
@@ -304,8 +295,7 @@ at::Tensor maskedmm_csr_cuda_forward(
     cudaSetDevice(indptr.get_device());
 
     const auto e = eid.size(0);
-    const auto n = A.size(0);
-    assert(n == indptr.size(0) - 1);
+    const auto n = row.size(0);
     const auto d = A.size(-1);
     const auto h = (A.dim() == 2) ? 1: A.size(1);
     auto y = (h == 1) ? at::zeros({e}, A.options()): at::zeros({e, h}, A.options());
@@ -317,6 +307,7 @@ at::Tensor maskedmm_csr_cuda_forward(
 
     AT_DISPATCH_IDX_DATA_TYPES(indptr.type(), A.type(), "maskedmm_csr_cuda_forward", ([&] {
         maskedmm_csr_forward_kernel<idx_t, data_t><<<blocks, threads, 0, stream>>>(
+            row.data<idx_t>(),
             indptr.data<idx_t>(),
             eid.data<idx_t>(),
             indices.data<idx_t>(),
@@ -376,9 +367,11 @@ std::vector<at::Tensor> node_mul_edge_cuda_backward(
 
 // __global__ void maskedmm_csr_backward_kernel(idx_t* __restrict__ indptr_r, idx_t* __restrict__ eid_r, idx_t* __restrict__ indices_r, idx_t* __restrict__ indptr_c, idx_t* __restrict__ eid_c, idx_t* __restrict__ indices_c, data_t* __restrict__ A, data_t* __restrict__ B, data_t* __restrict__ dy, data_t* __restrict__ dA, data_t* __restrict__ dB, int d, int n)
 std::vector<at::Tensor> maskedmm_csr_cuda_backward(
+    const at::Tensor& row,
     const at::Tensor& indptr_r,
     const at::Tensor& eid_r,
     const at::Tensor& indices_r,
+    const at::Tensor& col,
     const at::Tensor& indptr_c,
     const at::Tensor& eid_c,
     const at::Tensor& indices_c,
@@ -389,7 +382,7 @@ std::vector<at::Tensor> maskedmm_csr_cuda_backward(
     cudaSetDevice(indptr_r.get_device());
 
     const auto e = eid_r.size(0);
-    const auto n = A.size(0);
+    const auto n0 = row.size(0);
     const auto d = A.size(-1);
     const auto h = (dy.dim() == 2) ? dy.size(1): 1;
 
@@ -400,22 +393,31 @@ std::vector<at::Tensor> maskedmm_csr_cuda_backward(
     auto dA = at::zeros_like(A, A.options());
     auto dB = at::zeros_like(B, B.options());
 
-    AT_DISPATCH_IDX_DATA_TYPES(indptr_r.type(), A.type(), "maskedmm_csr_cuda_backward", ([&] {
+    AT_DISPATCH_IDX_DATA_TYPES(indptr_r.type(), B.type(), "maskedmm_csr_cuda_backward", ([&] {
         maskedmm_csr_backward_kernel<idx_t, data_t><<<blocks, threads, 0, stream>>>(
+            row.data<idx_t>(),
             indptr_r.data<idx_t>(),
             eid_r.data<idx_t>(),
             indices_r.data<idx_t>(),
+            B.data<data_t>(),
+            dy.data<data_t>(),
+            dA.data<data_t>(),
+            d, n0, h);
+    }));
+    THCudaCheck(cudaGetLastError());
+
+    const auto n1 = col.size(0);
+    AT_DISPATCH_IDX_DATA_TYPES(indptr_c.type(), A.type(), "maskedmm_csr_cuda_backward", ([&] {
+        maskedmm_csr_backward_kernel<idx_t, data_t><<<blocks, threads, 0, stream>>>(
+            col.data<idx_t>(),
             indptr_c.data<idx_t>(),
             eid_c.data<idx_t>(),
             indices_c.data<idx_t>(),
             A.data<data_t>(),
-            B.data<data_t>(),
             dy.data<data_t>(),
-            dA.data<data_t>(),
             dB.data<data_t>(),
-            d, n, h);
+            d, n1, h);
     }));
-    THCudaCheck(cudaGetLastError());
     return {dA, dB};
 }
 

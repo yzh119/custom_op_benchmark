@@ -6,6 +6,7 @@
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
 at::Tensor maskedmm_csr_cuda_forward(
+    const at::Tensor& row,
     const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& indices,
@@ -13,17 +14,19 @@ at::Tensor maskedmm_csr_cuda_forward(
     const at::Tensor& B);
 
 at::Tensor maskedmm_csr_forward(
+    const at::Tensor& row,
     const at::Tensor& indptr,
     const at::Tensor& eid,
     const at::Tensor& indices,
     const at::Tensor& A,
     const at::Tensor& B) {
+    CHECK_INPUT(row);
     CHECK_INPUT(indptr);
     CHECK_INPUT(eid);
     CHECK_INPUT(indices);
     CHECK_INPUT(A);
     CHECK_INPUT(B);
-    return maskedmm_csr_cuda_forward(indptr, eid, indices, A, B);
+    return maskedmm_csr_cuda_forward(row, indptr, eid, indices, A, B);
 }
 
 at::Tensor node_mul_edge_cuda_forward(
@@ -102,9 +105,11 @@ std::vector<at::Tensor> maskedmm_backward(
 }
 
 std::vector<at::Tensor> maskedmm_csr_cuda_backward(
+    const at::Tensor& row,
     const at::Tensor& indptr_r,
     const at::Tensor& eid_r,
     const at::Tensor& indices_r,
+    const at::Tensor& col,
     const at::Tensor& indptr_c,
     const at::Tensor& eid_c,
     const at::Tensor& indices_c,
@@ -113,24 +118,28 @@ std::vector<at::Tensor> maskedmm_csr_cuda_backward(
     const at::Tensor& dy);
 
 std::vector<at::Tensor> maskedmm_csr_backward(
+    const at::Tensor& row,
     const at::Tensor& indptr_r,
     const at::Tensor& eid_r,
     const at::Tensor& indices_r,
+    const at::Tensor& col,
     const at::Tensor& indptr_c,
     const at::Tensor& eid_c,
     const at::Tensor& indices_c,
     const at::Tensor& A,
     const at::Tensor& B,
     const at::Tensor& dy) {
+    CHECK_INPUT(row);
     CHECK_INPUT(indptr_r);
     CHECK_INPUT(eid_r);
     CHECK_INPUT(indices_r);
+    CHECK_INPUT(col);
     CHECK_INPUT(indptr_c);
     CHECK_INPUT(eid_c);
     CHECK_INPUT(indices_c);
     CHECK_INPUT(A);
     CHECK_INPUT(B);
-    return maskedmm_csr_cuda_backward(indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B, dy);
+    return maskedmm_csr_cuda_backward(row, indptr_r, eid_r, indices_r, col, indptr_c, eid_c, indices_c, A, B, dy);
 }
 
 std::vector<at::Tensor> node_mul_edge_cuda_backward(

@@ -14,19 +14,6 @@ class SparseSoftmax(Function):
         indptr, eid, y = ctx.saved_tensors
         return None, None, sparse_softmax_backward(indptr, eid, y, dy)
 
-class MaskedMM(Function):
-    @staticmethod
-    def forward(ctx, adj, A, B):
-        row, col = adj._indices()
-        ctx.save_for_backward(row, col, A, B)
-        return maskedmm_forward(row, col, A, B)
-
-    @staticmethod
-    def backward(ctx, grad):
-        row, col, A, B = ctx.saved_tensors
-        dA, dB = maskedmm_backward(row, col, A, B, grad)
-        return None, dA, dB
-
 class MaskedMMCSR(Function):
     @staticmethod
     def forward(ctx, indptr_r, eid_r, indices_r, indptr_c, eid_c, indices_c, A, B):
@@ -179,20 +166,6 @@ if __name__ == '__main__':
     print('simple implementation, hand-crafted autograd')
     tic = time.time()
     y = MaskedMMSimple.apply(inc_x, inc_y, A, B)
-    th.cuda.synchronize()
-    print('forward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(y, y_ori)
-    tic = time.time()
-    y.backward(grad)
-    th.cuda.synchronize()
-    print('backward elapse time: {}'.format(time.time() - tic))
-    assert th.allclose(A.grad, A_grad_ori) and th.allclose(B.grad, B_grad_ori)
-    A.grad.zero_()
-    B.grad.zero_()
-
-    print('custom kernel(coo)')
-    tic = time.time()
-    y = MaskedMM.apply(adj, A, B)
     th.cuda.synchronize()
     print('forward elapse time: {}'.format(time.time() - tic))
     assert th.allclose(y, y_ori)

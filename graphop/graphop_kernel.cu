@@ -52,47 +52,6 @@
 namespace {
 
 /*
- * CUDA Kernel of the forward function for Masked Matrix Multiplication:
- * y = adj * (A @ B^T)
- * This is an unoptimized version, to better utilize shared memory, some sort of padding is required.
- * Note that we use the row and col vector to represent the sparse matrix adj. (coo format)
- */
-template <typename idx_t, typename data_t>
-__global__ void maskedmm_forward_kernel(const idx_t* __restrict__ row, const idx_t* __restrict__ col, const data_t* __restrict__ A, const data_t* __restrict__ Bt, data_t* __restrict__ y, const int e, const int d, const int n, const int h) {
-    int i = (((blockIdx.x) * blockDim.x) + (threadIdx.x));
-    if (i < e) {
-        for (int ko = 0; ko < h; ++ko) {
-            data_t sum = 0;
-            for (int k = 0; k < d; ++k) {
-                sum += A[(row[i] * h + ko) * d + k] * Bt[col[i] + ((ko * d + k) * n)];
-            }
-            y[i * h + ko] = sum;
-        }
-    }
-}
-
-/*
- * CUDA Kernel of the backward function for Masked Matrix Multiplication: 
- * dA = B @ (dy * adj)
- * dB = A @ (dy * adj)
- * Mostly the same as src_mul_edge
- */
-template <typename idx_t, typename data_t>
-__global__ void maskedmm_backward_kernel(const idx_t* __restrict__ row, const idx_t* __restrict__ col, const data_t* __restrict__ A, const data_t* __restrict__ B, const data_t* __restrict__ dy, data_t* __restrict__ dA, data_t* __restrict__ dB, const int e, const int d, const int n, const int h) {
-    int j = blockIdx.x * blockDim.x + threadIdx.x;
-    if (j < d * h) {
-        for (int k = 0; k < n; ++k) {
-            dA[k * d * h + j] = 0;
-            dB[k * d * h + j] = 0;
-        }
-        for (int k = 0; k < e; ++k) {
-            dA[row[k] * d * h + j] += dy[k * h + j / d] * B[col[k] * d * h + j];
-            dB[col[k] * d * h + j] += dy[k * h + j / d] * A[row[k] * d * h + j];
-        }
-    }
-}
-
-/*
  * CUDA Kernel of the forward function for Node-Edge Multiplication(reduced on edge, designed for relative positional encoding).
  */
 template <typename idx_t, typename data_t>
@@ -301,73 +260,6 @@ __global__ void sparse_softmax_backward_kernel_1(const idx_t* __restrict__ indpt
 
 } // End of namespace
 
-at::Tensor maskedmm_cuda_forward(
-    const at::Tensor& row,
-    const at::Tensor& col,
-    const at::Tensor& A,
-    const at::Tensor& B) {
-    // row, col: (e); A, B: (n, d) or (n, h, d); y: (e, h)
-    cudaSetDevice(row.get_device());
-
-    const auto e = row.size(0);
-    const auto n = A.size(0);
-    const auto d = A.size(-1);
-    const auto h = (A.dim() == 2) ? 1: A.size(1);
-    auto y = (h == 1) ? at::zeros({e}, A.options()): at::zeros({e, h}, A.options());
-
-    const int threads = 1024;
-    const dim3 blocks((e + threads - 1) / threads);
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-    auto Bt = (h == 1) ? B.transpose(0, 1).contiguous(): B.permute({1, 2, 0}).contiguous();
-
-    AT_DISPATCH_IDX_DATA_TYPES(row.type(), A.type(), "maskedmm_cuda_forward", ([&] {
-        maskedmm_forward_kernel<idx_t, data_t><<<blocks, threads, 0, stream>>>(
-            row.data<idx_t>(),
-            col.data<idx_t>(),
-            A.data<data_t>(),
-            Bt.data<data_t>(),
-            y.data<data_t>(),
-            e, d, n, h);
-    }));
-    THCudaCheck(cudaGetLastError());
-    return y;
-}
-
-std::vector<at::Tensor> maskedmm_cuda_backward(
-    const at::Tensor& row,
-    const at::Tensor& col,
-    const at::Tensor& A,
-    const at::Tensor& B,
-    const at::Tensor& dy) {
-    // row, col: (e); dy: (e) or (e, h); A, B: (n, d) or (n, h, d);
-    cudaSetDevice(row.get_device());
-
-    const auto e = row.size(0);
-    const auto n = A.size(0);
-    const auto d = A.size(-1);
-    const auto h = (dy.dim() == 2) ? dy.size(1): 1;
-
-    const int threads = 1024; 
-    const dim3 blocks((d + threads - 1) / threads);
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-
-    auto dA = at::zeros_like(A, A.options());
-    auto dB = at::zeros_like(B, B.options());
-
-    AT_DISPATCH_IDX_DATA_TYPES(row.type(), A.type(), "maskedmm_cuda_backward", ([&] {
-        maskedmm_backward_kernel<idx_t, data_t><<<blocks, threads, 0, stream>>>(
-            row.data<idx_t>(),
-            col.data<idx_t>(),
-            A.data<data_t>(),
-            B.data<data_t>(),
-            dy.data<data_t>(),
-            dA.data<data_t>(),
-            dB.data<data_t>(),
-            e, d, n, h);
-    }));
-    THCudaCheck(cudaGetLastError());
-    return {dA, dB};
-}
 
 at::Tensor node_mul_edge_cuda_forward(
     const at::Tensor& indptr,

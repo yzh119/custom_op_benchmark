@@ -5,24 +5,6 @@
 #define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x " must be contiguous")
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
-at::Tensor maskedmm_cuda_forward(
-    const at::Tensor& row,
-    const at::Tensor& col,
-    const at::Tensor& A,
-    const at::Tensor& B);
-
-at::Tensor maskedmm_forward(
-    const at::Tensor& row,
-    const at::Tensor& col,
-    const at::Tensor& A,
-    const at::Tensor& B) {
-    CHECK_INPUT(row);
-    CHECK_INPUT(col);
-    CHECK_INPUT(A);
-    CHECK_INPUT(B);
-    return maskedmm_cuda_forward(row, col, A, B);
-}
-
 at::Tensor maskedmm_csr_cuda_forward(
     const at::Tensor& indptr,
     const at::Tensor& eid,
@@ -223,8 +205,6 @@ std::vector<at::Tensor> vector_spmm_backward(
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("maskedmm_forward", &maskedmm_forward, "Masked Matrix Multiplication forward");
-    m.def("maskedmm_backward", &maskedmm_backward, "Masked Matrix Multiplication backward");
     m.def("maskedmm_csr_forward", &maskedmm_csr_forward, "Masked Matrix Multiplication forward(CSR Format)");
     m.def("maskedmm_csr_backward", &maskedmm_csr_backward, "Masked Matrix Multiplication backward(CSR Format)");
     m.def("node_mul_edge_forward", &node_mul_edge_forward, "Node Multiply Edge forward");

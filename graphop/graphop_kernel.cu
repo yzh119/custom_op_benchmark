@@ -455,7 +455,7 @@ at::Tensor sparse_softmax_cuda_forward(
     
     auto sum = (h == 1) ? at::zeros({n}, x.options()): at::zeros({n, h}, x.options());
     auto max_val = (h == 1) ? at::zeros({n}, x.options()): at::zeros({n, h}, x.options());
-    at::fill_(max_val, 1e-9);
+    at::fill_(max_val, -1e9);
     const auto y = at::zeros_like(x, x.options());
     
     AT_DISPATCH_IDX_DATA_TYPES(eid.type(), x.type(), "sparse_softmax_cuda_forward_0",([&] {

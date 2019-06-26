@@ -14,9 +14,10 @@
 
 #define AT_CASE_ITYPE(enum_type, type, DTYPE, NAME, ...)                    \
   case enum_type: {                                                         \
-    const at::Type& dtype = DTYPE;                                          \
+    const auto& dtype = DTYPE;                                              \
     using idx_t = type;                                                     \
-    switch (dtype.scalarType()) {                                           \
+    at::ScalarType _st = ::detail::scalar_type(dtype);                      \
+    switch (_st) {                                                          \
      case at::ScalarType::Float: {                                          \
         using data_t = float;                                               \
         return __VA_ARGS__();                                               \
@@ -32,8 +33,9 @@
 
 #define AT_DISPATCH_IDX_DATA_TYPES(ITYPE, DTYPE, NAME, ...)                             \
   [&] {                                                                                 \
-    const at::Type& itype = ITYPE;                                                      \
-    switch (itype.scalarType()) {                                                       \
+    const auto& itype = ITYPE;                                                          \
+    at::ScalarType _st = ::detail::scalar_type(itype);                                  \
+    switch (_st) {                                                                      \
       AT_CASE_ITYPE(at::ScalarType::Int, int32_t, DTYPE, NAME, __VA_ARGS__)             \
       AT_CASE_ITYPE(at::ScalarType::Long, int64_t, DTYPE, NAME, __VA_ARGS__)            \
       default:                                                                          \

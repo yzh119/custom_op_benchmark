@@ -417,7 +417,7 @@ at::Tensor sparse_softmax_cuda_forward(
 
     // indptr: (n + 1); eid: (e); x: (e) or (e, h);
     const auto n_row = row.size(0);
-    const auto n = n_row;
+    const auto n = eid.size(0); // n <= e
     const auto h = (x.dim() == 2) ? x.size(1): 1;
     const dim3 threads(h);
     const dim3 blocks(n_row);
@@ -472,7 +472,7 @@ at::Tensor sparse_softmax_cuda_backward(
 
     // indptr: (n + 1); eid: (e); y: (e) or (e, h); dy: (e) or (e, h);
     const auto n_row = row.size(0);
-    const auto n = n_row;
+    const auto n = eid.size(0); // n <= e
     const auto h = (dy.dim() == 2) ? dy.size(1): 1;
     const dim3 threads(h);
     const dim3 blocks(n_row);

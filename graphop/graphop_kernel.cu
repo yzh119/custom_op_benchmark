@@ -138,15 +138,21 @@ __global__ void vector_spmm_forward_kernel_new(const int64_t* __restrict__ row, 
     int j = blockIdx.x; // each block is responsible for one feature dimension
     int tx = threadIdx.x; // each thread is responsible for a group
     // we first move x to shared memory.
-    if (tx < n)
-        local[tx] = x[tx * d * h + j];
+    for (int i = 0; i < n / blockDim.x; ++i) {
+        int idx = i * blockDim.x + tx;
+        if (idx < n)
+            local[idx] = x[idx * d * h + j];
+    }
     __syncthreads();
-    if (tx < n_row) {
-        scalar_t sum = 0;
-        for (int k = indptr[tx]; k < indptr[tx + 1]; ++k) {
-            sum += edata[eid[k] * h + j / d] * local[indices[k]];
+    for (int i = 0; i < n_row / blockDim.x; ++i) {
+        int idx = i * blockDim.x * tx;
+        if (idx < n_row) {
+            scalar_t sum = 0;
+            for (int k = indptr[idx]; k < indptr[idx + 1]; ++k) {
+                sum += edata[eid[k] * h + j / d] * local[indices[k]];
+            }
+            dgl::AtomicAdd(y + row[idx] * d * h + j, sum);
         }
-        dgl::AtomicAdd(y + row[tx] * d * h + j, sum);
     }
 }
 
@@ -579,7 +585,7 @@ at::Tensor vector_spmm_cuda_forward_new(
     const auto h = (edata.dim() == 2) ? edata.size(1): 1;
     const auto d = x.size(-1); 
 
-    const int threads = n_row;
+    const int threads = min(n_row, 1024);
     const dim3 blocks(d * h);
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 

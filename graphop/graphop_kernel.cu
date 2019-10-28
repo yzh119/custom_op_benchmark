@@ -130,6 +130,28 @@ __global__ void vector_spmm_forward_kernel(const int64_t* __restrict__ row, cons
 }
 
 /*
+ *
+ */
+template <typename scalar_t>
+__global__ void vector_spmm_forward_kernel_new(const int64_t* __restrict__ row, const int64_t* __restrict__ indptr, const int64_t* __restrict__ eid, const int64_t* __restrict__ indices, const scalar_t* __restrict__ edata, const scalar_t* __restrict__ x, scalar_t* __restrict__ y, const int d, const int n, const int n_row, const int h) {
+    __shared__ *scalar_t local[n];
+    int j = blockIdx.x; // each block is responsible for one feature dimension
+    int tx = threadIdx.x; // each thread is responsible for a group
+    // we first move x to shared memory.
+    if (tx < n)
+        local[tx] = x[tx * d * h + j];
+    __syncthreads();
+    if (tx < n_row) {
+        scalar_t sum = 0;
+        for (int k = indptr[tx]; k < indptr[tx + 1]; ++k) {
+            sum += edata[eid[k] * h + j / d] * local[indices[k]];
+        }
+        dgl::AtomicAdd(y + row[tx] * d * h + j, sum);
+    }
+}
+
+
+/*
  * CUDA Kernel of the backward function for Source Multiply Edge Function.
  */
 template <typename scalar_t>
@@ -516,6 +538,7 @@ at::Tensor vector_spmm_cuda_forward(
     // indptr: (n + 1); eid, indices: (e); edata: (e) or (e, h); x: (n, d) or (n, h, d);
     cudaSetDevice(indptr.get_device());
 
+    const auto n_row = x.size(0);
     const auto n = row.size(0); 
     const auto h = (edata.dim() == 2) ? edata.size(1): 1;
     const auto d = x.size(-1); 
@@ -536,6 +559,42 @@ at::Tensor vector_spmm_cuda_forward(
             x.data<scalar_t>(),
             y.data<scalar_t>(),
             d, n, h);
+    }));
+    THCudaCheck(cudaGetLastError());
+    return y;
+}
+
+at::Tensor vector_spmm_cuda_forward_new(
+    const at::Tensor& row,
+    const at::Tensor& indptr,
+    const at::Tensor& eid,
+    const at::Tensor& indices,
+    const at::Tensor& edata,
+    const at::Tensor& x) {
+    // indptr: (n + 1); eid, indices: (e); edata: (e) or (e, h); x: (n, d) or (n, h, d);
+    cudaSetDevice(indptr.get_device());
+
+    const auto n_row = x.size(0);
+    const auto n = row.size(0); 
+    const auto h = (edata.dim() == 2) ? edata.size(1): 1;
+    const auto d = x.size(-1); 
+
+    const int threads = n_row;
+    const dim3 blocks(d * h);
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+    const auto y = at::zeros_like(x, x.options());
+    
+    AT_DISPATCH_FLOATING_TYPES(x.type(), "vector_spmm_forward_new", ([&] {
+        vector_spmm_forward_kernel_new<scalar_t><<<blocks, threads, 0, stream>>>(
+            row.data<int64_t>(),
+            indptr.data<int64_t>(),
+            eid.data<int64_t>(),
+            indices.data<int64_t>(),
+            edata.data<scalar_t>(),
+            x.data<scalar_t>(),
+            y.data<scalar_t>(),
+            d, n, n_row, h);
     }));
     THCudaCheck(cudaGetLastError());
     return y;
